@@ -1,0 +1,31 @@
+# Rust
+/target
+**/*.rs.bk
+Cargo.lock
+
+# Node / Frontend
+viewer-ui/node_modules
+viewer-ui/dist
+viewer-ui/.vite
+viewer-ui/.eslintcache
+
+# Python
+python-test-server/.pytest_cache
+python-test-server/.mypy_cache
+python-test-server/build
+python-test-server/dist
+python-test-server/*.egg-info
+
+# Logs
+*.log
+
+# IDE / Editors
+.vscode
+.idea
+
+# WASM build artifacts
+pkg
+wasm-pack.log
+
+# Docker
+docker-volume/
