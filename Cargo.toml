@@ -1,0 +1,21 @@
+[workspace]
+members = [
+    "crates/core"
+]
+
+[workspace.package]
+edition = "2021"
+license = "MIT"
+authors = ["Gryphon Project Contributors"]
+
+[workspace.dependencies]
+prost = "0.13"
+prost-types = "0.13"
+prost-build = "0.13"
+thiserror = "1"
+rnd = "0.8"
+anyhow = "1"
+tracing = "0.1"
+futures = "0.3"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
