@@ -9,6 +9,7 @@ members = [
 ]
 resolver = "2"
 
+
 [workspace.package]
 edition = "2021"
 license = "MIT"
@@ -32,3 +33,12 @@ tokio-tungstenite = "0.21"
 
 [workspace.metadata.cargo-udeps.ignore]
 # Add crates to ignore if unused detection is noisy
+prost-build = "0.13"
+thiserror = "1"
+rand = "0.8"
+anyhow = "1"
+tracing = "0.1"
+futures = "0.3"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
