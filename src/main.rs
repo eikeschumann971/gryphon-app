@@ -37,7 +37,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // Configure a deadpool_postgres pool from the application config
     let mut dp_cfg = DeadPoolConfig::new();
     dp_cfg.host = Some(config.postgres.host.clone());
-    dp_cfg.port = Some(config.postgres.port as u16);
+    dp_cfg.port = Some(config.postgres.port);
     dp_cfg.user = Some(config.postgres.username.clone());
     dp_cfg.password = Some(config.postgres.password.clone());
     dp_cfg.dbname = Some(config.postgres.database.clone());
