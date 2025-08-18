@@ -10,7 +10,7 @@ use std::time::Duration;
 
 pub struct KafkaEventStore {
     producer: FutureProducer,
-    consumer: StreamConsumer,
+    _consumer: StreamConsumer,
     config: KafkaConfig,
 }
 
@@ -35,7 +35,7 @@ impl KafkaEventStore {
 
         Ok(Self {
             producer,
-            consumer,
+            _consumer: consumer,
             config,
         })
     }

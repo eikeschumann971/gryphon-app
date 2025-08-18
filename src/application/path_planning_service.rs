@@ -2,7 +2,6 @@
 use std::sync::Arc;
 use crate::common::ApplicationResult;
 use crate::domains::path_planning::{PathPlanningCommandActor, PlanningAlgorithm, PathPlanningDataSource, GraphStoreAsync};
-use async_trait::async_trait;
 
 pub struct PathPlanningService {
     command_actor: PathPlanningCommandActor,

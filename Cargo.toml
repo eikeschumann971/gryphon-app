@@ -49,9 +49,9 @@ geojson = "0.24.2"
 ordered-float = "5.0.0"
 
 [dev-dependencies]
-testcontainers = "0.15"
-testcontainers-modules = { version = "0.3", features = ["kafka", "postgres"] }
+testcontainers = "0.24"
 tempfile = "3.3"
+testcontainers-modules = { version = "0.12.1", features = ["postgres"] }
 
 [[bin]]
 name = "gryphon-app"
@@ -61,3 +61,6 @@ path = "src/main.rs"
 [lib]
 name = "gryphon_app"
 path = "src/lib.rs"
+
+[features]
+pg_integration = []

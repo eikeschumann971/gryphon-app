@@ -8,6 +8,8 @@ use gryphon_app::adapters::outbound::path_planning_data::FilesystemDataSource;
 use gryphon_app::adapters::outbound::postgres_graph_store::PostgresGraphStore;
 use gryphon_app::application::PathPlanningService;
 use gryphon_app::domains::path_planning::PathPlanningCommandActor;
+use deadpool_postgres::{Config as DeadPoolConfig, Pool};
+use tokio_postgres::NoTls;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
@@ -32,14 +34,19 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let ds_arc: Arc<dyn gryphon_app::domains::path_planning::PathPlanningDataSource> = Arc::new(fs_ds);
 
     // Construct Postgres graph store (async) and application service
-    let pg_conn = format!("host={} port={} user={} password={} dbname={}",
-        config.postgres.host,
-        config.postgres.port,
-        config.postgres.username,
-        config.postgres.password,
-        config.postgres.database
-    );
-    let pg_store = PostgresGraphStore::new(pg_conn);
+    // Configure a deadpool_postgres pool from the application config
+    let mut dp_cfg = DeadPoolConfig::new();
+    dp_cfg.host = Some(config.postgres.host.clone());
+    dp_cfg.port = Some(config.postgres.port as u16);
+    dp_cfg.user = Some(config.postgres.username.clone());
+    dp_cfg.password = Some(config.postgres.password.clone());
+    dp_cfg.dbname = Some(config.postgres.database.clone());
+    // deadpool-postgres Config does not expose max_size directly on this struct in all versions;
+    // if you need to tune max connections, set it via environment or update this code to match the
+    // specific deadpool version in use. For now, use defaults.
+
+    let pool: Pool = dp_cfg.create_pool(None, NoTls).expect("failed to create pg pool");
+    let pg_store = PostgresGraphStore::new(pool);
     let pg_arc: Arc<dyn gryphon_app::domains::path_planning::GraphStoreAsync> = Arc::new(pg_store);
 
     // Construct application service
