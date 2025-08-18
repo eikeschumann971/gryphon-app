@@ -1,0 +1,18 @@
+@startuml
+title Plan lifecycle state machine
+[*] --> Planning
+Planning --> Assigned : PlanAssigned
+Assigned --> InProgress : PlanAssignmentAccepted
+InProgress --> Complete : PlanCompleted
+InProgress --> Failed : PlanFailed
+Assigned --> Rejected : PlanAssignmentRejected
+Assigned --> TimedOut : PlanAssignmentTimedOut
+Rejected --> Planning
+TimedOut --> Planning
+Failed --> Planning
+
+note right of InProgress
+  Worker computes waypoints
+end note
+
+@enduml

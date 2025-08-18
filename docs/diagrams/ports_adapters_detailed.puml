@@ -1,0 +1,65 @@
+@startuml
+title Ports & Adapters (detailed) - gryphon-app
+left to right direction
+skinparam componentStyle rectangle
+
+package "Application Services" {
+  [PathPlanningService] <<component>>
+  [LogicalAgentService] <<component>>
+  [TechnicalAgentService] <<component>>
+  [KinematicAgentService] <<component>>
+}
+
+package "Domain (Ports & Aggregates)" {
+  interface "GraphStoreAsync (ports/domains/path_planning)" as GraphStorePort
+  interface "PathPlanningDataSource (ports)" as DataSourcePort
+  interface "EventStore (common)" as EventStorePort
+  component "PathPlanner (aggregate)" as PathPlannerAgg
+}
+
+package "Outbound Adapters" {
+  component "FilesystemDataSource" as FS <<adapter>>
+  component "PostgresGraphStore" as PG <<adapter>>
+  component "KafkaAdapter" as KAFKA <<adapter>>
+}
+
+package "Infrastructure" {
+  database "Postgres" as DB
+  [Kafka Cluster]
+  folder "resources/path_planning" as ASSETS
+}
+
+' Dependency edges
+PathPlanningService ..> GraphStorePort : uses
+PathPlanningService ..> DataSourcePort : loads maps
+PathPlanningService ..> EventStorePort : records events
+
+' Adapter realizations
+FS ..|> DataSourcePort
+PG ..|> GraphStorePort
+KAFKA ..|> EventStorePort
+
+' Infra wiring
+PG --> DB : stores graph bytes (table: graphs)
+FS --> ASSETS : reads/writes graph files (PGPH header)
+KAFKA --> [Kafka Cluster]
+
+note right of PathPlanningService
+  Examples of files:
+  - src/application/path_planning_service.rs
+  - src/adapters/outbound/path_planning_data.rs
+  - src/adapters/outbound/postgres_graph_store.rs
+end note
+
+note bottom of PG
+  Postgres adapter uses deadpool_postgres pool
+  see: src/adapters/outbound/postgres_graph_store.rs
+end note
+
+note left of FS
+  FilesystemDataSource serializes graph as:
+  "PGPH" + version(u8) + header_len(u32 LE) + json header + bincode payload
+  see: src/adapters/outbound/path_planning_data.rs
+end note
+
+@enduml

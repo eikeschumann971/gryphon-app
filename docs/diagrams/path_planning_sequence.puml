@@ -1,0 +1,37 @@
+@startuml
+title Path planning request lifecycle
+skinparam sequenceMessageAlign center
+actor User
+participant GUI as "GUI / Client"
+participant API as "gryphon-app (API)"
+participant Service as "PathPlanningService"
+participant CommandActor as "PathPlanningCommandActor"
+participant Planner as "PathPlanner (aggregate)"
+participant Worker as "PathPlanWorker"
+participant GraphStore as "GraphStore (Postgres / Filesystem)"
+participant EventStore as "EventStore"
+
+User -> GUI: Request route (start, destination)
+GUI -> API: POST /route {start, destination}
+API -> Service: validate + create request
+Service -> CommandActor: create_plan_request(command)
+CommandActor -> EventStore: append event (PathPlanRequested)
+EventStore -> Service: ACK
+Service -> Planner: dispatch PathPlanRequested
+Planner -> GraphStore: load_graph_bytes(map_id)
+GraphStore --> Planner: graph bytes
+Planner -> Worker: assign plan (PlanAssigned)
+Worker -> Planner: PlanAssignmentAccepted
+Worker -> Planner: compute route (uses graph)
+Worker -> Planner: return PlanCompleted (waypoints)
+Planner -> EventStore: append events (PlanCompleted)
+EventStore -> Planner: ACK
+Planner -> Service: emit plan result / update state
+Service -> API: notify completion / response
+API -> GUI: deliver route (waypoints)
+GUI -> User: display route
+
+note over Worker: Worker may cache graph or request pages from GraphStore
+note over GraphStore: Graph bytes serialized with header: "PGPH" + version + JSON header + bincode payload
+
+@enduml

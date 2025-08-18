@@ -1,0 +1,62 @@
+@startuml
+title Path Planning — detailed sequence
+skinparam sequenceMessageAlign center
+actor User
+participant GUI as "GUI / Client"
+participant API as "gryphon-app (HTTP)"
+participant Service as "PathPlanningService"
+participant CommandActor as "PathPlanningCommandActor"
+participant Planner as "PathPlanner (aggregate)"
+participant Worker as "PathPlanWorker"
+participant GraphStore as "GraphStore (Postgres / Filesystem)"
+participant EventStore as "EventStore"
+
+User -> GUI: click 'Plan route' (start, goal)
+GUI -> API: POST /route {start, destination, planner_id?}
+API -> Service: validate inputs, auth
+activate Service
+Service -> CommandActor: create_plan_request(command)
+activate CommandActor
+CommandActor -> EventStore: append event (PathPlanRequested)
+activate EventStore
+EventStore --> CommandActor: ack
+deactivate EventStore
+
+CommandActor -> Planner: dispatch PathPlanRequested
+activate Planner
+Planner -> GraphStore: load_graph_bytes(map_id)
+activate GraphStore
+GraphStore --> Planner: graph bytes
+deactivate GraphStore
+Planner -> Planner: compute candidates (in-memory)
+Planner -> Worker: PlanAssigned (select worker)
+deactivate Planner
+
+activate Worker
+Worker -> Worker: ensure graph cached
+alt graph not cached
+  Worker -> GraphStore: load_graph_bytes(map_id)
+  GraphStore --> Worker: graph bytes
+end
+Worker -> Planner: PlanAssignmentAccepted
+Worker -> Worker: compute route (astar/dijkstra)
+Worker -> Planner: PlanCompleted (waypoints)
+deactivate Worker
+
+activate Planner
+Planner -> EventStore: append events (PlanCompleted)
+activate EventStore
+EventStore --> Planner: ack
+deactivate EventStore
+Planner -> Service: emit result / update state
+deactivate Planner
+
+Service -> API: response (waypoints)
+deactivate Service
+API -> GUI: deliver waypoints
+GUI -> User: display route
+
+note over GraphStore: Graph format: "PGPH" + v(u8) + header_len(u32 LE) + JSON header + bincode payload
+note over Worker: Worker may stream tiles or cache full graph depending on size
+
+@enduml

@@ -1,0 +1,29 @@
+@startuml
+title Plan lifecycle state machine (detailed)
+[*] --> Planning : initial
+Planning --> Assigned : PlanAssigned / assign worker
+Assigned --> InProgress : PlanAssignmentAccepted / worker starts
+InProgress --> Complete : PlanCompleted / worker returns waypoints
+InProgress --> Failed : PlanFailed / worker reports failure
+Assigned --> Rejected : PlanAssignmentRejected / worker rejects
+Assigned --> TimedOut : PlanAssignmentTimedOut / timeout
+Complete --> Archived : ArchivePlan
+Failed --> Retried : RetryPlan
+Retried --> Planning
+Rejected --> Planning
+TimedOut --> Planning
+
+state InProgress {
+  [*] --> Computing
+  Computing --> WaitingForResource : need graph
+  WaitingForResource --> Computing : graph loaded
+  Computing --> Finalizing
+  Finalizing --> [*]
+}
+
+note right of InProgress
+  - Workers may cache graph bytes locally
+  - Timeouts and retries affect assignment queues
+end note
+
+@enduml
