@@ -15,7 +15,13 @@ fn test_filesystem_datasource_save_and_load() {
     fs::create_dir_all(&geo_dir).unwrap();
     let mut geo_file = geo_dir.clone();
     geo_file.push("sample.geojson");
-    fs::write(&geo_file, "{ \"type\": \"FeatureCollection\" }").unwrap();
+        fs::write(&geo_file, r#"{
+    "type": "FeatureCollection",
+    "features": [
+        { "type": "Feature", "properties": {"name": "A"}, "geometry": { "type": "Point", "coordinates": [0.0, 0.0] } },
+        { "type": "Feature", "properties": {"name": "B"}, "geometry": { "type": "Point", "coordinates": [10.0, 0.0] } }
+    ]
+}"#).unwrap();
 
     let geo = ds.load_geojson("sample.geojson").unwrap();
     assert!(geo.contains("FeatureCollection"));
