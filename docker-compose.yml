@@ -1,48 +1,56 @@
 version: '3.8'
 
 services:
-  zookeeper:
-    image: confluentinc/cp-zookeeper:7.4.0
-    hostname: zookeeper
-    container_name: gryphon-zookeeper
-    ports:
-      - "2181:2181"
-    environment:
-      ZOOKEEPER_CLIENT_PORT: 2181
-      ZOOKEEPER_TICK_TIME: 2000
-
   kafka:
-    image: confluentinc/cp-kafka:7.4.0
+    image: confluentinc/cp-kafka:7.6.1
     hostname: kafka
     container_name: gryphon-kafka
-    depends_on:
-      - zookeeper
     ports:
-      - "29092:29092"
       - "9092:9092"
       - "9101:9101"
     environment:
-      KAFKA_BROKER_ID: 1
-      KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
-      KAFKA_METRIC_REPORTERS: io.confluent.metrics.reporter.ConfluentMetricsReporter
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
-      KAFKA_CONFLUENT_METRICS_REPORTER_BOOTSTRAP_SERVERS: kafka:29092
-      KAFKA_CONFLUENT_METRICS_REPORTER_TOPIC_REPLICAS: 1
-      KAFKA_CONFLUENT_METRICS_ENABLE: 'true'
-      KAFKA_CONFLUENT_SUPPORT_CUSTOMER_ID: anonymous
-      KAFKA_PROCESS_ROLES: 'broker,controller'
+      # KRaft mode configuration (no Zookeeper needed)
       KAFKA_NODE_ID: 1
-      KAFKA_CONTROLLER_QUORUM_VOTERS: '1@kafka:29093'
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT'
+      KAFKA_ADVERTISED_LISTENERS: 'PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092'
       KAFKA_LISTENERS: 'PLAINTEXT://kafka:29092,CONTROLLER://kafka:29093,PLAINTEXT_HOST://0.0.0.0:9092'
       KAFKA_INTER_BROKER_LISTENER_NAME: 'PLAINTEXT'
       KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
+      KAFKA_CONTROLLER_QUORUM_VOTERS: '1@kafka:29093'
+      KAFKA_PROCESS_ROLES: 'broker,controller'
+      
+      # Storage and logging
       KAFKA_LOG_DIRS: '/tmp/kraft-combined-logs'
+      KAFKA_METADATA_LOG_SEGMENT_MS: 15000
+      KAFKA_METADATA_MAX_RETENTION_MS: 1200000
+      KAFKA_METADATA_LOG_MAX_RECORD_BYTES_BETWEEN_SNAPSHOTS: 2800
+      
+      # Replication settings for single broker
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      
+      # Cluster ID (required for KRaft)
+      CLUSTER_ID: 'MkU3OEVBNTcwNTJENDM2Qk'
     volumes:
-      - ./scripts/update_run.sh:/tmp/update_run.sh
-    command: "bash -c 'if [ ! -f /tmp/update_run.sh ]; then echo \"#!/bin/bash\necho 'Formatting Kafka storage...'\n/etc/confluent/docker/run\" > /tmp/update_run.sh; fi; /tmp/update_run.sh'"
+      - kafka_data:/tmp/kraft-combined-logs
+      - ./scripts/kafka-setup.sh:/tmp/kafka-setup.sh
+    command: >
+      bash -c "
+        echo 'Starting Kafka in KRaft mode...'
+        
+        # Format storage if needed
+        if [ ! -f /tmp/kraft-combined-logs/meta.properties ]; then
+          echo 'Formatting Kafka storage directory...'
+          /bin/kafka-storage format \
+            --config /etc/kafka/kraft/server.properties \
+            --cluster-id $${CLUSTER_ID}
+        fi
+        
+        # Start Kafka
+        /etc/confluent/docker/run
+      "
 
   postgres:
     image: postgres:15-alpine
@@ -72,3 +80,4 @@ services:
 
 volumes:
   postgres_data:
+  kafka_data:
