@@ -1,6 +1,10 @@
+#[cfg(feature = "pg_integration")]
 use gryphon_app::adapters::outbound::postgres_graph_store::PostgresGraphStore;
+#[cfg(feature = "pg_integration")]
 use gryphon_app::adapters::outbound::path_planning_data::FilesystemDataSource;
+#[cfg(feature = "pg_integration")]
 use deadpool_postgres::Config as DeadPoolConfig;
+#[cfg(feature = "pg_integration")]
 use tokio_postgres::NoTls;
 #[cfg(feature = "use_testcontainers")]
 use testcontainers::clients::Cli;
