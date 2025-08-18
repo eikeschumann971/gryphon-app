@@ -1,7 +1,7 @@
 use crate::common::DomainEvent;
 use serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc};
-use super::aggregate::PlanningAlgorithm;
+use super::aggregate::{PlanningAlgorithm, Position2D, Orientation2D};
 use crate::domains::kinematic_agent::Position3D;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -9,6 +9,17 @@ pub enum PathPlanningEvent {
     PlannerCreated {
         planner_id: String,
         algorithm: PlanningAlgorithm,
+        timestamp: DateTime<Utc>,
+    },
+    RouteRequested {
+        planner_id: String,
+        request_id: String,
+        plan_id: String,
+        agent_id: String,
+        start_position: Position2D,
+        destination_position: Position2D,
+        start_orientation: Orientation2D,
+        destination_orientation: Orientation2D,
         timestamp: DateTime<Utc>,
     },
     PlanRequested {
@@ -37,6 +48,7 @@ impl DomainEvent for PathPlanningEvent {
     fn event_type(&self) -> &'static str {
         match self {
             PathPlanningEvent::PlannerCreated { .. } => "PlannerCreated",
+            PathPlanningEvent::RouteRequested { .. } => "RouteRequested",
             PathPlanningEvent::PlanRequested { .. } => "PlanRequested",
             PathPlanningEvent::PlanCompleted { .. } => "PlanCompleted",
             PathPlanningEvent::PlanFailed { .. } => "PlanFailed",
@@ -46,6 +58,7 @@ impl DomainEvent for PathPlanningEvent {
     fn aggregate_id(&self) -> &str {
         match self {
             PathPlanningEvent::PlannerCreated { planner_id, .. } => planner_id,
+            PathPlanningEvent::RouteRequested { planner_id, .. } => planner_id,
             PathPlanningEvent::PlanRequested { planner_id, .. } => planner_id,
             PathPlanningEvent::PlanCompleted { planner_id, .. } => planner_id,
             PathPlanningEvent::PlanFailed { planner_id, .. } => planner_id,
@@ -57,6 +70,7 @@ impl DomainEvent for PathPlanningEvent {
     fn occurred_at(&self) -> DateTime<Utc> {
         match self {
             PathPlanningEvent::PlannerCreated { timestamp, .. } => *timestamp,
+            PathPlanningEvent::RouteRequested { timestamp, .. } => *timestamp,
             PathPlanningEvent::PlanRequested { timestamp, .. } => *timestamp,
             PathPlanningEvent::PlanCompleted { timestamp, .. } => *timestamp,
             PathPlanningEvent::PlanFailed { timestamp, .. } => *timestamp,
