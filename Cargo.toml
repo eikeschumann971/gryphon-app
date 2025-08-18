@@ -64,3 +64,4 @@ path = "src/lib.rs"
 
 [features]
 pg_integration = []
+use_testcontainers = []
