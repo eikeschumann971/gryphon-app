@@ -1,7 +1,7 @@
 use crate::common::DomainEvent;
 use serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc};
-use super::aggregate::{PlanningAlgorithm, Position2D, Orientation2D, WorkerStatus};
+use super::aggregate::{PlanningAlgorithm, Position2D, Orientation2D};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum PathPlanningEvent {

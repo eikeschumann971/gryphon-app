@@ -1,54 +1,13 @@
 use crate::common::{AggregateRoot, DomainResult, DomainError};
 use serde::{Deserialize, Serialize};
-use super::events::PathPlanningEvent;
-use chrono::{DateTime, Utc};
+use super::super::events::PathPlanningEvent;
+use chrono::Utc;
 use uuid::Uuid;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Position2D {
-    pub x: f64,
-    pub y: f64,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Orientation2D {
-    pub angle: f64, // Angle in radians
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RouteRequest {
-    pub request_id: String,
-    pub agent_id: String,
-    pub start_position: Position2D,
-    pub destination_position: Position2D,
-    pub start_orientation: Orientation2D,
-    pub destination_orientation: Orientation2D,
-    pub created_at: DateTime<Utc>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PathPlanWorker {
-    pub worker_id: String,
-    pub status: WorkerStatus,
-    pub algorithm_capabilities: Vec<PlanningAlgorithm>,
-    pub last_heartbeat: DateTime<Utc>,
-    pub current_plan_id: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub enum WorkerStatus {
-    Idle,
-    Busy,
-    Offline,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PlanAssignment {
-    pub plan_id: String,
-    pub worker_id: String,
-    pub assigned_at: DateTime<Utc>,
-    pub timeout_at: DateTime<Utc>,
-}
+use super::types::{Position2D, RouteRequest, PlanningAlgorithm};
+use super::worker::{PathPlanWorker, WorkerStatus, PlanAssignment};
+use super::plan::{PathPlan, PlanStatus};
+use super::workspace::{Workspace, WorkspaceBounds};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PathPlanner {
@@ -61,64 +20,6 @@ pub struct PathPlanner {
     pub version: u64,
     #[serde(skip)]
     uncommitted_events: Vec<PathPlanningEvent>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub enum PlanningAlgorithm {
-    AStar,
-    RRT,
-    PRM,
-    Dijkstra,
-    DynamicWindow,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Workspace {
-    pub bounds: WorkspaceBounds,
-    pub obstacles: Vec<Obstacle>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct WorkspaceBounds {
-    pub min_x: f64, pub max_x: f64,
-    pub min_y: f64, pub max_y: f64,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Obstacle {
-    pub id: String,
-    pub shape: ObstacleShape,
-    pub position: Position2D,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum ObstacleShape {
-    Circle { radius: f64 },
-    Rectangle { width: f64, height: f64 },
-    Polygon { vertices: Vec<Position2D> },
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PathPlan {
-    pub id: String,
-    pub agent_id: String,
-    pub start: Position2D,
-    pub goal: Position2D,
-    pub start_orientation: Orientation2D,
-    pub destination_orientation: Orientation2D,
-    pub waypoints: Vec<Position2D>,
-    pub status: PlanStatus,
-    pub created_at: DateTime<Utc>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub enum PlanStatus {
-    Planning,        // Waiting for assignment
-    Assigned,        // Assigned to a worker but not started
-    InProgress,      // Being processed by a worker
-    Complete,        // Successfully completed
-    Failed(String),  // Failed with reason
-    Executing,       // Being executed by agent
 }
 
 impl PathPlanner {
