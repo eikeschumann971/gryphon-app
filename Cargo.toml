@@ -50,9 +50,6 @@ testcontainers-modules = { version = "0.3", features = ["kafka", "postgres"] }
 name = "gryphon-app"
 path = "src/main.rs"
 
-[[bin]]
-name = "pathplan-worker"
-path = "src/bin/pathplan_worker.rs"
 
 [lib]
 name = "gryphon_app"
