@@ -49,6 +49,45 @@ This test validates `PostgresGraphStore` end-to-end. Two approaches are supporte
 
    The repo has `testcontainers` in `dev-dependencies`. If you prefer the test to start containers automatically, the test can be adapted to use `testcontainers` directly; note this requires matching the `testcontainers` API and images available on your host.
 
+### Options to run `pg_integration_tests`
+
+You have multiple ways to run the Postgres integration test. Choose one based on convenience and CI constraints.
+
+- Helper script (recommended for local convenience)
+  - Use the provided script `scripts/run_pg_integration_test.sh` which:
+    - Starts a Postgres Docker container (default host port 5433), waits for readiness,
+    - Sets `PG_TEST_PORT` and runs the gated integration test (`cargo test --features pg_integration`),
+    - Stops the container when finished.
+  - Usage:
+
+    ```bash
+    ./scripts/run_pg_integration_test.sh    # uses port 5433 by default
+    ./scripts/run_pg_integration_test.sh 5444  # use custom host port
+    ```
+
+- Manual Docker (explicit control)
+  - Start a Postgres container yourself and run the test against it:
+  ```bash
+  docker run --rm -e POSTGRES_PASSWORD=postgres -p 5433:5432 -d postgres:15
+  export PG_TEST_PORT=5433
+  cargo test --features pg_integration -- tests::pg_integration_tests -- --nocapture
+  ```
+
+- In-test `testcontainers` mode (auto-provision from the test)
+  - Set the environment variable `USE_TESTCONTAINERS=1` to instruct the test to use `testcontainers` and start Postgres automatically inside the test process.
+  - Example:
+  ```bash
+  USE_TESTCONTAINERS=1 cargo test --features pg_integration -- tests::pg_integration_tests -- --nocapture
+  ```
+  - Notes:
+    - This requires Docker available on the host and compatible `testcontainers` images.
+    - This is useful for self-contained runs and some CI setups.
+
+- CI considerations
+  - Prefer running integration tests in a separate CI job that provisions Postgres as a service.
+  - In GitHub Actions you can use the `services:` block to start Postgres and run the integration job with `--features pg_integration` (example workflow snippets provided below).
+
+
 ## Execution tips
 
 - Run a specific test function by passing its name as the last argument to `cargo test`:
