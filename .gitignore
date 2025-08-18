@@ -76,3 +76,8 @@ coverage/
 local/
 scratch/
 
+# For the transition phase ...
+_old/
+_old2/
+
+
