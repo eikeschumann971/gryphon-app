@@ -39,6 +39,9 @@ anyhow = "1.0"
 # Testing
 tokio-test = "0.4"
 
+# Random number generation
+rand = "0.8"
+
 [dev-dependencies]
 testcontainers = "0.15"
 testcontainers-modules = { version = "0.3", features = ["kafka", "postgres"] }
@@ -46,6 +49,10 @@ testcontainers-modules = { version = "0.3", features = ["kafka", "postgres"] }
 [[bin]]
 name = "gryphon-app"
 path = "src/main.rs"
+
+[[bin]]
+name = "pathplan-worker"
+path = "src/bin/pathplan_worker.rs"
 
 [lib]
 name = "gryphon_app"

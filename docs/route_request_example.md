@@ -125,6 +125,15 @@ This event can be consumed by:
 ## Next Steps
 
 After a route request is accepted, typically:
+
 1. A path planning algorithm processes the request
 2. A `PlanCompleted` or `PlanFailed` event is emitted
 3. The resulting path is made available to the requesting agent
+
+The generated `PathPlan` includes:
+
+- **Start and goal positions** (2D coordinates)
+- **Start and destination orientations** (for proper vehicle alignment)  
+- **Creation timestamp** (for tracking and analytics)
+- **Waypoints** (populated when planning completes)
+- **Status tracking** (Planning → Complete/Failed/Executing)
