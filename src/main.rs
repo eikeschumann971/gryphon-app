@@ -5,6 +5,7 @@ use std::sync::Arc;
 use tokio::sync::mpsc;
 
 use gryphon_app::adapters::outbound::path_planning_data::FilesystemDataSource;
+use gryphon_app::adapters::outbound::postgres_graph_store::PostgresGraphStore;
 use gryphon_app::application::PathPlanningService;
 use gryphon_app::domains::path_planning::PathPlanningCommandActor;
 
@@ -30,8 +31,19 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let fs_ds = FilesystemDataSource::new(None);
     let ds_arc: Arc<dyn gryphon_app::domains::path_planning::PathPlanningDataSource> = Arc::new(fs_ds);
 
+    // Construct Postgres graph store (async) and application service
+    let pg_conn = format!("host={} port={} user={} password={} dbname={}",
+        config.postgres.host,
+        config.postgres.port,
+        config.postgres.username,
+        config.postgres.password,
+        config.postgres.database
+    );
+    let pg_store = PostgresGraphStore::new(pg_conn);
+    let pg_arc: Arc<dyn gryphon_app::domains::path_planning::GraphStoreAsync> = Arc::new(pg_store);
+
     // Construct application service
-    let path_planning_service = PathPlanningService::new(command_actor, ds_arc.clone());
+    let path_planning_service = PathPlanningService::new(command_actor, ds_arc.clone(), pg_arc.clone());
 
     // Demo: try loading a sample map (non-fatal)
     match path_planning_service.load_map_source("sample_map.geojson") {

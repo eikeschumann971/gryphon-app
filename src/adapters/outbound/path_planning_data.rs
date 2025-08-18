@@ -14,6 +14,11 @@ use serde::{Serialize, Deserialize};
 use bincode;
 use ordered_float::NotNan;
 use std::str::FromStr;
+use serde_json::json;
+
+// Node coordinate type used in graphs
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct Coord(pub f64, pub f64);
 
 
 pub struct FilesystemDataSource {
@@ -68,26 +73,88 @@ impl FilesystemDataSource {
         Ok(())
     }
 
+    /// Build a petgraph structure from GeoJSON and return it.
+    pub fn build_graph_struct(&self, geojson: &str) -> DomainResult<Graph<Coord, (), Undirected>> {
+        // reuse the parsing logic in build_graph_from_geojson
+        self.build_graph_from_geojson(geojson)
+    }
+
+    /// Save a petgraph to disk with a small header (magic + version + metadata length + metadata JSON + payload).
+    pub fn save_graph(&self, name: &str, graph: &Graph<Coord, (), Undirected>) -> DomainResult<()> {
+        // serialize graph with bincode
+        let payload = bincode::serialize(graph).map_err(|e| DomainError::InfrastructureError(format!("bincode serialize error: {}", e)))?;
+        // header
+        let header = json!({"format":"petgraph-bincode","version":1});
+        let header_bytes = serde_json::to_vec(&header).map_err(|e| DomainError::InfrastructureError(format!("header json error: {}", e)))?;
+
+        let mut p = self.base.clone();
+        p.push("graphs");
+        if !p.exists() { fs::create_dir_all(&p).map_err(|e| DomainError::InfrastructureError(format!("{}", e)))?; }
+        p.push(name);
+
+        let mut f = fs::File::create(&p).map_err(|e| DomainError::InfrastructureError(format!("{}", e)))?;
+        // write magic
+        f.write_all(b"PGPH").map_err(|e| DomainError::InfrastructureError(format!("{}", e)))?;
+        // write version (u8)
+        f.write_all(&[1u8]).map_err(|e| DomainError::InfrastructureError(format!("{}", e)))?;
+        // write header length (u32 LE)
+        let hl = (header_bytes.len() as u32).to_le_bytes();
+        f.write_all(&hl).map_err(|e| DomainError::InfrastructureError(format!("{}", e)))?;
+        // write header
+        f.write_all(&header_bytes).map_err(|e| DomainError::InfrastructureError(format!("{}", e)))?;
+        // write payload
+        f.write_all(&payload).map_err(|e| DomainError::InfrastructureError(format!("{}", e)))?;
+        Ok(())
+    }
+
+    /// Load a petgraph previously saved with `save_graph`.
+    pub fn load_graph(&self, name: &str) -> DomainResult<Graph<Coord, (), Undirected>> {
+        let mut p = self.base.clone();
+        p.push("graphs");
+        p.push(name);
+        let mut f = fs::File::open(&p).map_err(|e| DomainError::InfrastructureError(format!("{}", e)))?;
+        // read magic
+        let mut magic = [0u8;4];
+        f.read_exact(&mut magic).map_err(|e| DomainError::InfrastructureError(format!("{}", e)))?;
+        if &magic != b"PGPH" { return Err(DomainError::InfrastructureError("invalid graph file magic".to_string())); }
+        // version
+        let mut ver = [0u8;1];
+        f.read_exact(&mut ver).map_err(|e| DomainError::InfrastructureError(format!("{}", e)))?;
+        let mut hl = [0u8;4];
+        f.read_exact(&mut hl).map_err(|e| DomainError::InfrastructureError(format!("{}", e)))?;
+        let header_len = u32::from_le_bytes(hl) as usize;
+        let mut header_bytes = vec![0u8; header_len];
+        f.read_exact(&mut header_bytes).map_err(|e| DomainError::InfrastructureError(format!("{}", e)))?;
+        // rest is payload
+        let mut payload = Vec::new();
+        f.read_to_end(&mut payload).map_err(|e| DomainError::InfrastructureError(format!("{}", e)))?;
+
+        match ver[0] {
+            0 => {
+                // legacy format: payload is direct bincode of Graph<Coord,..>
+                let graph: Graph<Coord, (), Undirected> = bincode::deserialize(&payload).map_err(|e| DomainError::InfrastructureError(format!("bincode deserialize error (v0): {}", e)))?;
+                Ok(graph)
+            }
+            1 => {
+                // current format: payload is bincode of Graph as well
+                let graph: Graph<Coord, (), Undirected> = bincode::deserialize(&payload).map_err(|e| DomainError::InfrastructureError(format!("bincode deserialize error (v1): {}", e)))?;
+                Ok(graph)
+            }
+            other => Err(DomainError::InfrastructureError(format!("unsupported graph file version: {}", other))),
+        }
+    }
+
     /// Build a minimal placeholder graph from a GeoJSON string and return serialized bytes.
     /// In a real implementation this would construct a Petgraph and serialize with bincode.
-    pub fn build_graph_from_geojson(&self, geojson: &str) -> DomainResult<Vec<u8>> {
+    pub fn build_graph_from_geojson(&self, geojson: &str) -> DomainResult<Graph<Coord, (), Undirected>> {
         // Parse the GeoJSON and build a simple undirected graph.
         // For this implementation we support FeatureCollections with LineString or MultiLineString features.
-    let gj = GeoJson::from_str(geojson).map_err(|e| DomainError::InfrastructureError(format!("geojson parse error: {}", e)))?;
+        let gj = GeoJson::from_str(geojson).map_err(|e| DomainError::InfrastructureError(format!("geojson parse error: {}", e)))?;
 
-    // We'll store node coordinates as (f64, f64)
-    #[derive(Serialize, Deserialize, Clone)]
-    struct Coord(f64, f64);
-
-        #[derive(Serialize, Deserialize)]
-        struct SerializableGraph {
-            nodes: Vec<Coord>,
-            edges: Vec<(usize, usize)>,
-            directed: bool,
-        }
+        // We'll construct a petgraph::Graph<Coord, ()>
 
         let mut graph: Graph<Coord, (), Undirected> = Graph::new_undirected();
-    let mut coord_index_map: std::collections::HashMap<(NotNan<f64>,NotNan<f64>), NodeIndex> = std::collections::HashMap::new();
+        let mut coord_index_map: std::collections::HashMap<(NotNan<f64>,NotNan<f64>), NodeIndex> = std::collections::HashMap::new();
 
         if let GeoJson::FeatureCollection(fc) = gj {
             for feature in fc.features.iter() {
@@ -151,24 +218,6 @@ impl FilesystemDataSource {
             return Err(DomainError::InfrastructureError("expected FeatureCollection GeoJSON".to_string()));
         }
 
-        // Convert graph into serializable structure
-        let mut nodes: Vec<Coord> = Vec::new();
-        let mut index_to_pos: std::collections::HashMap<NodeIndex, usize> = std::collections::HashMap::new();
-        for (i, n) in graph.node_indices().enumerate() {
-            let coord = graph[n].clone();
-            index_to_pos.insert(n, i);
-            nodes.push(coord);
-        }
-        let mut edges: Vec<(usize,usize)> = Vec::new();
-        for e in graph.edge_indices() {
-            let (a,b) = graph.edge_endpoints(e).unwrap();
-            let pa = index_to_pos[&a];
-            let pb = index_to_pos[&b];
-            edges.push((pa,pb));
-        }
-
-        let sgraph = SerializableGraph { nodes, edges, directed: false };
-        let bytes = bincode::serialize(&sgraph).map_err(|e| DomainError::InfrastructureError(format!("bincode serialize error: {}", e)))?;
-        Ok(bytes)
+    Ok(graph)
     }
 }

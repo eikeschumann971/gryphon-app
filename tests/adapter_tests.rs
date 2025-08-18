@@ -26,11 +26,12 @@ fn test_filesystem_datasource_save_and_load() {
     let geo = ds.load_geojson("sample.geojson").unwrap();
     assert!(geo.contains("FeatureCollection"));
 
-    // build graph bytes and save
-    let graph_bytes = ds.build_graph_from_geojson(&geo).unwrap();
-    ds.save_graph_bytes("sample.graph.bin", &graph_bytes).unwrap();
+    // build graph struct and save using new graph API
+    let graph = ds.build_graph_struct(&geo).unwrap();
+    ds.save_graph("sample.graph.bin", &graph).unwrap();
 
     // load back
-    let loaded = ds.load_graph_bytes("sample.graph.bin").unwrap();
-    assert_eq!(loaded, graph_bytes);
+    let loaded = ds.load_graph("sample.graph.bin").unwrap();
+    assert_eq!(graph.node_count(), loaded.node_count());
+    assert_eq!(graph.edge_count(), loaded.edge_count());
 }
