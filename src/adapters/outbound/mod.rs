@@ -1,5 +1,7 @@
 pub mod kafka;
 pub mod postgres;
+pub mod path_planning_data;
 
 pub use kafka::*;
 pub use postgres::*;
+pub use path_planning_data::*;

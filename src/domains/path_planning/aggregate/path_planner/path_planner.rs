@@ -182,7 +182,7 @@ impl PathPlanner {
         Ok(())
     }
 
-    fn is_position_in_workspace(&self, position: &Position2D) -> bool {
+    pub fn is_position_in_workspace(&self, position: &Position2D) -> bool {
         let bounds = &self.workspace.bounds;
         position.x >= bounds.min_x && position.x <= bounds.max_x &&
         position.y >= bounds.min_y && position.y <= bounds.max_y

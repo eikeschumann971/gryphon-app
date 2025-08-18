@@ -45,6 +45,7 @@ rand = "0.8"
 [dev-dependencies]
 testcontainers = "0.15"
 testcontainers-modules = { version = "0.3", features = ["kafka", "postgres"] }
+tempfile = "3.3"
 
 [[bin]]
 name = "gryphon-app"

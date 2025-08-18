@@ -7,3 +7,6 @@ pub use aggregate::*;
 pub use events::*;
 pub use projections::*;
 pub use actors::*;
+pub mod ports;
+
+pub use ports::*;
