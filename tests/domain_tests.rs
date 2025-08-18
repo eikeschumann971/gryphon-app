@@ -40,7 +40,7 @@ async fn test_add_objective() {
 async fn test_path_planner_route_request() {
     let mut planner = PathPlanner::new("planner-1".to_string(), PlanningAlgorithm::AStar);
     
-    let route_request = RouteRequest {
+    let path_plan_request = PathPlanRequest {
         request_id: "req-123".to_string(),
         agent_id: "agent-1".to_string(),
         start_position: Position2D { x: 10.0, y: 20.0 },
@@ -50,7 +50,7 @@ async fn test_path_planner_route_request() {
         created_at: Utc::now(),
     };
     
-    let result = planner.handle_route_request(route_request);
+    let result = planner.request_path_plan(path_plan_request);
     assert!(result.is_ok());
     
     // Check that the RouteRequested event was emitted
@@ -95,7 +95,7 @@ async fn test_path_planner_route_request_invalid_position() {
     let mut planner = PathPlanner::new("planner-1".to_string(), PlanningAlgorithm::AStar);
     
     // Create a route request with start position outside workspace bounds
-    let route_request = RouteRequest {
+    let path_plan_request = PathPlanRequest {
         request_id: "req-123".to_string(),
         agent_id: "agent-1".to_string(),
         start_position: Position2D { x: -200.0, y: 20.0 }, // Outside bounds
@@ -105,7 +105,7 @@ async fn test_path_planner_route_request_invalid_position() {
         created_at: Utc::now(),
     };
     
-    let result = planner.handle_route_request(route_request);
+    let result = planner.request_path_plan(path_plan_request);
     assert!(result.is_err());
     
     if let Err(error) = result {
@@ -171,7 +171,7 @@ async fn test_path_planner_work_assignment() {
     planner.handle_worker_ready(worker_id.clone()).unwrap();
     
     // Create a route request using the existing API
-    let route_request = RouteRequest {
+    let path_plan_request = PathPlanRequest {
         request_id: "req-123".to_string(),
         agent_id: "agent-1".to_string(),
         start_position: Position2D { x: 10.0, y: 20.0 },
@@ -181,7 +181,7 @@ async fn test_path_planner_work_assignment() {
         created_at: Utc::now(),
     };
     
-    planner.handle_route_request(route_request).unwrap();
+    planner.request_path_plan(path_plan_request).unwrap();
     
     // Verify the worker and plan exist
     assert_eq!(planner.registered_workers.len(), 1);

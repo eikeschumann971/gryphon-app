@@ -72,7 +72,7 @@ impl PathPlanner {
     pub fn mark_worker_offline(&mut self, worker_id: &str, reason: String) -> DomainResult<()>
     
     // Plan Management  
-    pub fn request_route(&mut self, request: RouteRequest) -> DomainResult<String>
+    pub fn request_path_plan(&mut self, request: PathPlanRequest) -> DomainResult<String>
     pub fn assign_plan_to_worker(&mut self, plan_id: &str, worker_id: &str, timeout_seconds: u64) -> DomainResult<()>
     pub fn complete_plan(&mut self, plan_id: &str, waypoints: Vec<Position2D>) -> DomainResult<()>
     pub fn fail_plan(&mut self, plan_id: &str, reason: String) -> DomainResult<()>
@@ -90,8 +90,10 @@ pub struct Position2D {
 ```
 
 **RouteRequest**
+**PathPlanRequest**
+
 ```rust
-pub struct RouteRequest {
+pub struct PathPlanRequest {
     pub request_id: String,
     pub agent_id: String,
     pub start_position: Position2D,
@@ -204,7 +206,7 @@ planner.register_worker(worker)?;
 ```rust
 use chrono::Utc;
 
-let route_request = RouteRequest {
+let path_plan_request = PathPlanRequest {
     request_id: "req-001".to_string(),
     agent_id: "agent-001".to_string(),
     start_position: Position2D { x: 0.0, y: 0.0 },
@@ -214,7 +216,7 @@ let route_request = RouteRequest {
     created_at: Utc::now(),
 };
 
-let plan_id = planner.request_route(route_request)?;
+let plan_id = planner.request_path_plan(path_plan_request)?;
 println!("Created plan: {}", plan_id);
 ```
 

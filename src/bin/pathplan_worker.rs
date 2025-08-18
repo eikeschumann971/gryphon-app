@@ -39,30 +39,30 @@ impl AStarPathPlanWorker {
             tokio::time::sleep(Duration::from_secs(5)).await;
             
             // Simulate processing a path planning request
-            if let Some(route_request) = self.simulate_receive_work().await {
+            if let Some(path_plan_request) = self.simulate_receive_work().await {
                 println!("🎯 Worker {} received planning request: {} -> {}", 
                          self.worker_id, 
-                         format!("({:.1}, {:.1})", route_request.start_position.x, route_request.start_position.y),
-                         format!("({:.1}, {:.1})", route_request.destination_position.x, route_request.destination_position.y));
+                         format!("({:.1}, {:.1})", path_plan_request.start_position.x, path_plan_request.start_position.y),
+                         format!("({:.1}, {:.1})", path_plan_request.destination_position.x, path_plan_request.destination_position.y));
                 
-                let waypoints = self.plan_path_astar(&route_request).await?;
+                let waypoints = self.plan_path_astar(&path_plan_request).await?;
                 
                 println!("✅ Worker {} completed path with {} waypoints", 
                          self.worker_id, waypoints.len());
                 
                 // In a real implementation, this would send results back via message bus
-                self.simulate_send_result(&route_request.request_id, waypoints).await;
+                self.simulate_send_result(&path_plan_request.request_id, waypoints).await;
             }
         }
     }
 
-    async fn simulate_receive_work(&self) -> Option<RouteRequest> {
+    async fn simulate_receive_work(&self) -> Option<PathPlanRequest> {
         // Simulate receiving work every few iterations
         use rand::Rng;
         let mut rng = rand::thread_rng();
         
         if rng.gen_bool(0.7) { // 70% chance of receiving work
-            Some(RouteRequest {
+            Some(PathPlanRequest {
                 request_id: format!("req-{}", Uuid::new_v4()),
                 agent_id: format!("agent-{}", rng.gen::<u32>() % 5),
                 start_position: Position2D { 
@@ -82,13 +82,13 @@ impl AStarPathPlanWorker {
         }
     }
 
-    async fn plan_path_astar(&self, route_request: &RouteRequest) -> Result<Vec<Position2D>, Box<dyn std::error::Error>> {
+    async fn plan_path_astar(&self, path_plan_request: &PathPlanRequest) -> Result<Vec<Position2D>, Box<dyn std::error::Error>> {
         println!("🧠 Starting A* pathfinding from ({:.1}, {:.1}) to ({:.1}, {:.1})", 
-                 route_request.start_position.x, route_request.start_position.y,
-                 route_request.destination_position.x, route_request.destination_position.y);
+                 path_plan_request.start_position.x, path_plan_request.start_position.y,
+                 path_plan_request.destination_position.x, path_plan_request.destination_position.y);
 
         // Dummy A* implementation with sleep delays to simulate computation
-        let waypoints = self.dummy_astar_algorithm(&route_request.start_position, &route_request.destination_position).await;
+        let waypoints = self.dummy_astar_algorithm(&path_plan_request.start_position, &path_plan_request.destination_position).await;
         
         Ok(waypoints)
     }

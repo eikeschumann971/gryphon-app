@@ -13,7 +13,7 @@ pub struct Orientation2D {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RouteRequest {
+pub struct PathPlanRequest {
     pub request_id: String,
     pub agent_id: String,
     pub start_position: Position2D,

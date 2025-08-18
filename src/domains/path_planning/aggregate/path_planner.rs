@@ -4,7 +4,7 @@ use super::super::events::PathPlanningEvent;
 use chrono::Utc;
 use uuid::Uuid;
 
-use super::types::{Position2D, RouteRequest, PlanningAlgorithm};
+use super::types::{Position2D, PathPlanRequest, PlanningAlgorithm};
 use super::worker::{PathPlanWorker, WorkerStatus, PlanAssignment};
 use super::plan::{PathPlan, PlanStatus};
 use super::workspace::{Workspace, WorkspaceBounds};
@@ -52,15 +52,15 @@ impl PathPlanner {
     }
 
     /// Handle a route request command
-    pub fn handle_route_request(&mut self, route_request: RouteRequest) -> DomainResult<()> {
+    pub fn request_path_plan(&mut self, path_plan_request: PathPlanRequest) -> DomainResult<()> {
         // Validate the route request
-        if !self.is_position_in_workspace(&route_request.start_position) {
+        if !self.is_position_in_workspace(&path_plan_request.start_position) {
             return Err(DomainError::InvalidCommand {
                 reason: "Start position is outside workspace bounds".to_string(),
             });
         }
 
-        if !self.is_position_in_workspace(&route_request.destination_position) {
+        if !self.is_position_in_workspace(&path_plan_request.destination_position) {
             return Err(DomainError::InvalidCommand {
                 reason: "Destination position is outside workspace bounds".to_string(),
             });
@@ -72,13 +72,13 @@ impl PathPlanner {
         // Emit the RouteRequested event - let apply() handle state changes
         let event = PathPlanningEvent::RouteRequested {
             planner_id: self.id.clone(),
-            request_id: route_request.request_id,
+            request_id: path_plan_request.request_id,
             plan_id: plan_id.clone(),
-            agent_id: route_request.agent_id,
-            start_position: route_request.start_position,
-            destination_position: route_request.destination_position,
-            start_orientation: route_request.start_orientation,
-            destination_orientation: route_request.destination_orientation,
+            agent_id: path_plan_request.agent_id,
+            start_position: path_plan_request.start_position,
+            destination_position: path_plan_request.destination_position,
+            start_orientation: path_plan_request.start_orientation,
+            destination_orientation: path_plan_request.destination_orientation,
             timestamp: Utc::now(),
         };
 
