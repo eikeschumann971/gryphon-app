@@ -77,7 +77,7 @@ local/
 scratch/
 
 # For the transition phase ...
-_old/
-_old2/
+/_old/
+/_old2/
 
 
