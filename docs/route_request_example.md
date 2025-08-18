@@ -72,7 +72,7 @@ match planner.handle_route_request(route_request) {
         // Check the emitted events
         for event in planner.uncommitted_events() {
             match event {
-                PathPlanningEvent::RouteRequested { plan_id, agent_id, .. } => {
+                PathPlanningEvent::PathPlanRequested { plan_id, agent_id, .. } => {
                     println!("Plan {} created for agent {}", plan_id, agent_id);
                 }
                 _ => {}
@@ -97,7 +97,7 @@ When a `RouteRequest` is successfully handled:
 
 1. **Validation**: The planner validates that start and destination positions are within workspace bounds
 2. **Plan Creation**: A new plan ID is generated and a `PathPlan` is prepared
-3. **Event Emission**: A `RouteRequested` event is emitted with all request details
+3. **Event Emission**: A `PathPlanRequested` event is emitted with all request details
 4. **State Update**: The event is applied to add the plan to the active plans list
 
 ## Error Handling
@@ -110,7 +110,7 @@ If validation fails, a `DomainError::InvalidCommand` is returned with a descript
 
 ## Integration with Event Sourcing
 
-The `RouteRequested` event contains:
+The `PathPlanRequested` event contains:
 - All original request data (for audit trail)
 - Generated plan ID
 - Timestamp of processing

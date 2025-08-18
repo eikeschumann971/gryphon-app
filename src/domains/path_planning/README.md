@@ -146,7 +146,7 @@ Comprehensive event model supporting:
 - `PlanAssignmentTimedOut` - Assignment expires without response
 
 **Planning Events:**
-- `RouteRequested` - New route planning request
+- `PathPlanRequested` - New route planning request
 - `PlanCompleted` - Successful path generation
 - `PlanFailed` - Path planning failed
 

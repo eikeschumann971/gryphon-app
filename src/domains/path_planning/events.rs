@@ -10,7 +10,7 @@ pub enum PathPlanningEvent {
         algorithm: PlanningAlgorithm,
         timestamp: DateTime<Utc>,
     },
-    RouteRequested {
+    PathPlanRequested {
         planner_id: String,
         request_id: String,
         plan_id: String,
@@ -104,7 +104,7 @@ impl DomainEvent for PathPlanningEvent {
     fn event_type(&self) -> &'static str {
         match self {
             PathPlanningEvent::PlannerCreated { .. } => "PlannerCreated",
-            PathPlanningEvent::RouteRequested { .. } => "RouteRequested",
+            PathPlanningEvent::PathPlanRequested { .. } => "PathPlanRequested",
             PathPlanningEvent::WorkerRegistered { .. } => "WorkerRegistered",
             PathPlanningEvent::WorkerReady { .. } => "WorkerReady",
             PathPlanningEvent::WorkerBusy { .. } => "WorkerBusy",
@@ -122,7 +122,7 @@ impl DomainEvent for PathPlanningEvent {
     fn aggregate_id(&self) -> &str {
         match self {
             PathPlanningEvent::PlannerCreated { planner_id, .. } => planner_id,
-            PathPlanningEvent::RouteRequested { planner_id, .. } => planner_id,
+            PathPlanningEvent::PathPlanRequested { planner_id, .. } => planner_id,
             PathPlanningEvent::WorkerRegistered { planner_id, .. } => planner_id,
             PathPlanningEvent::WorkerReady { planner_id, .. } => planner_id,
             PathPlanningEvent::WorkerBusy { planner_id, .. } => planner_id,
@@ -142,7 +142,7 @@ impl DomainEvent for PathPlanningEvent {
     fn occurred_at(&self) -> DateTime<Utc> {
         match self {
             PathPlanningEvent::PlannerCreated { timestamp, .. } => *timestamp,
-            PathPlanningEvent::RouteRequested { timestamp, .. } => *timestamp,
+            PathPlanningEvent::PathPlanRequested { timestamp, .. } => *timestamp,
             PathPlanningEvent::WorkerRegistered { timestamp, .. } => *timestamp,
             PathPlanningEvent::WorkerReady { timestamp, .. } => *timestamp,
             PathPlanningEvent::WorkerBusy { timestamp, .. } => *timestamp,

@@ -53,11 +53,11 @@ async fn test_path_planner_route_request() {
     let result = planner.request_path_plan(path_plan_request);
     assert!(result.is_ok());
     
-    // Check that the RouteRequested event was emitted
-    assert_eq!(planner.uncommitted_events().len(), 2); // PlannerCreated + RouteRequested
+    // Check that the PathPlanRequested event was emitted
+    assert_eq!(planner.uncommitted_events().len(), 2); // PlannerCreated + PathPlanRequested
     
     match &planner.uncommitted_events()[1] {
-        PathPlanningEvent::RouteRequested { 
+        PathPlanningEvent::PathPlanRequested { 
             request_id, 
             agent_id, 
             start_position, 
@@ -71,7 +71,7 @@ async fn test_path_planner_route_request() {
             assert_eq!(destination_position.x, 50.0);
             assert_eq!(destination_position.y, 80.0);
         }
-        _ => panic!("Expected RouteRequested event"),
+        _ => panic!("Expected PathPlanRequested event"),
     }
     
     // Check that a plan was added to active plans after applying the event

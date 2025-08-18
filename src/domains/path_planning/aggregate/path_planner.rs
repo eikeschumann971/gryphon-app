@@ -69,8 +69,8 @@ impl PathPlanner {
         // Generate a unique plan ID
         let plan_id = Uuid::new_v4().to_string();
 
-        // Emit the RouteRequested event - let apply() handle state changes
-        let event = PathPlanningEvent::RouteRequested {
+        // Emit the PathPlanRequested event - let apply() handle state changes
+        let event = PathPlanningEvent::PathPlanRequested {
             planner_id: self.id.clone(),
             request_id: path_plan_request.request_id,
             plan_id: plan_id.clone(),
@@ -269,7 +269,7 @@ impl AggregateRoot for PathPlanner {
             PathPlanningEvent::PlannerCreated { .. } => {
                 // Planner creation is handled in constructor
             }
-            PathPlanningEvent::RouteRequested { 
+            PathPlanningEvent::PathPlanRequested { 
                 plan_id, 
                 agent_id, 
                 start_position, 
