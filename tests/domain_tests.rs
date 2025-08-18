@@ -117,3 +117,84 @@ async fn test_path_planner_route_request_invalid_position() {
         }
     }
 }
+
+#[tokio::test]
+async fn test_path_planner_worker_registration() {
+    // Create a new path planner using the correct constructor
+    let planner_id = "planner-1".to_string();
+    let mut planner = PathPlanner::new(planner_id, PlanningAlgorithm::AStar);
+    
+    // Register a worker
+    let worker_id = "worker-1".to_string();
+    let capabilities = vec![PlanningAlgorithm::AStar, PlanningAlgorithm::Dijkstra];
+    
+    let result = planner.register_worker(worker_id.clone(), capabilities.clone());
+    assert!(result.is_ok());
+    
+    // Verify the worker was registered in the state
+    assert_eq!(planner.registered_workers.len(), 1);
+    
+    let worker = &planner.registered_workers[0];
+    assert_eq!(worker.worker_id, worker_id);
+    assert_eq!(worker.status, WorkerStatus::Idle);
+    assert_eq!(worker.algorithm_capabilities, capabilities);
+    assert!(worker.current_plan_id.is_none());
+    
+    // Verify event was emitted
+    assert_eq!(planner.uncommitted_events().len(), 2); // PlannerCreated + WorkerRegistered
+    
+    if let PathPlanningEvent::WorkerRegistered { 
+        worker_id: event_worker_id, 
+        algorithm_capabilities: event_capabilities,
+        .. 
+    } = &planner.uncommitted_events()[1] {
+        assert_eq!(*event_worker_id, worker_id);
+        assert_eq!(*event_capabilities, capabilities);
+    } else {
+        panic!("Expected WorkerRegistered event");
+    }
+}
+
+#[tokio::test]
+async fn test_path_planner_work_assignment() {
+    // Create a new path planner using the correct constructor
+    let planner_id = "planner-1".to_string(); 
+    let mut planner = PathPlanner::new(planner_id, PlanningAlgorithm::AStar);
+    
+    // Register a worker
+    let worker_id = "worker-1".to_string();
+    let capabilities = vec![PlanningAlgorithm::AStar];
+    
+    planner.register_worker(worker_id.clone(), capabilities).unwrap();
+    
+    // Mark worker as ready
+    planner.handle_worker_ready(worker_id.clone()).unwrap();
+    
+    // Create a route request using the existing API
+    let route_request = RouteRequest {
+        request_id: "req-123".to_string(),
+        agent_id: "agent-1".to_string(),
+        start_position: Position2D { x: 10.0, y: 20.0 },
+        destination_position: Position2D { x: 80.0, y: 90.0 },
+        start_orientation: Orientation2D { angle: 0.0 },
+        destination_orientation: Orientation2D { angle: 1.57 },
+        created_at: Utc::now(),
+    };
+    
+    planner.handle_route_request(route_request).unwrap();
+    
+    // Verify the worker and plan exist
+    assert_eq!(planner.registered_workers.len(), 1);
+    assert_eq!(planner.active_plans.len(), 1);
+    
+    // Verify the plan was created correctly
+    let plan = &planner.active_plans[0];
+    assert_eq!(plan.start.x, 10.0);
+    assert_eq!(plan.start.y, 20.0);
+    assert_eq!(plan.goal.x, 80.0);
+    assert_eq!(plan.goal.y, 90.0);
+    
+    // Verify worker is in the right state 
+    let worker = &planner.registered_workers[0];
+    assert_eq!(worker.status, WorkerStatus::Idle);
+}
