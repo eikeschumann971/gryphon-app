@@ -6,31 +6,56 @@ use gryphon_app::adapters::outbound::path_planning_data::FilesystemDataSource;
 use deadpool_postgres::Config as DeadPoolConfig;
 #[cfg(feature = "pg_integration")]
 use tokio_postgres::NoTls;
+#[cfg(all(feature = "pg_integration", not(feature = "use_testcontainers")))]
+use std::env;
+#[cfg(all(feature = "pg_integration", feature = "use_testcontainers"))]
+use testcontainers::clients::Cli;
+#[cfg(all(feature = "pg_integration", feature = "use_testcontainers"))]
+use testcontainers_modules::postgres::Postgres;
 
 #[cfg(feature = "pg_integration")]
 #[tokio::test]
 async fn test_postgres_graph_store_roundtrip() -> Result<(), Box<dyn std::error::Error>> {
-    // This test expects a local Postgres instance reachable at 127.0.0.1:<port>.
-    // You can start one with Docker before running the test:
-    // docker run --rm -e POSTGRES_PASSWORD=postgres -p 5433:5432 -d postgres:15
-    let port = std::env::var("PG_TEST_PORT").ok().and_then(|s| s.parse::<u16>().ok()).unwrap_or(5433u16);
-    let host = "127.0.0.1";
-    let user = "postgres";
-    let password = "postgres";
-    let db = "postgres";
+    // Two modes supported:
+    // - USE_TESTCONTAINERS=1 (or Cargo feature use_testcontainers): testcontainers will start Postgres automatically
+    // - default: use an externally started Postgres instance and the helper script `scripts/run_pg_integration_test.sh`
+    let (conn_str, pg) = if std::env::var("USE_TESTCONTAINERS").ok().as_deref() == Some("1") {
+        // Start with testcontainers in-process
+        let docker = Cli::default();
+        let node = docker.run(Postgres::default());
+        let port = node.get_host_port_ipv4(5432);
+        let host = "127.0.0.1";
+        let user = "postgres";
+        let password = "postgres";
+        let db = "postgres";
+        let conn_str = format!("host={} port={} user={} password={} dbname={}", host, port, user, password, db);
 
-    let conn_str = format!("host={} port={} user={} password={} dbname={}", host, port, user, password, db);
+        let mut dp_cfg = DeadPoolConfig::new();
+        dp_cfg.host = Some(host.to_string());
+        dp_cfg.port = Some(port);
+        dp_cfg.user = Some(user.to_string());
+        dp_cfg.password = Some(password.to_string());
+        dp_cfg.dbname = Some(db.to_string());
+        let pool = dp_cfg.create_pool(None, NoTls).expect("failed to create test pg pool");
+        (conn_str, PostgresGraphStore::new(pool))
+    } else {
+        // External container mode (helper script sets PG_TEST_PORT)
+        let port = std::env::var("PG_TEST_PORT").ok().and_then(|s| s.parse::<u16>().ok()).unwrap_or(5433u16);
+        let host = "127.0.0.1";
+        let user = "postgres";
+        let password = "postgres";
+        let db = "postgres";
+        let conn_str = format!("host={} port={} user={} password={} dbname={}", host, port, user, password, db);
 
-    // build a deadpool pool and pass it to the PostgresGraphStore
-    let mut dp_cfg = DeadPoolConfig::new();
-    dp_cfg.host = Some(host.to_string());
-    dp_cfg.port = Some(port);
-    dp_cfg.user = Some(user.to_string());
-    dp_cfg.password = Some(password.to_string());
-    dp_cfg.dbname = Some(db.to_string());
-
-    let pool = dp_cfg.create_pool(None, NoTls).expect("failed to create test pg pool");
-    let pg = PostgresGraphStore::new(pool);
+        let mut dp_cfg = DeadPoolConfig::new();
+        dp_cfg.host = Some(host.to_string());
+        dp_cfg.port = Some(port);
+        dp_cfg.user = Some(user.to_string());
+        dp_cfg.password = Some(password.to_string());
+        dp_cfg.dbname = Some(db.to_string());
+        let pool = dp_cfg.create_pool(None, NoTls).expect("failed to create test pg pool");
+        (conn_str, PostgresGraphStore::new(pool))
+    };
 
     // Wait for Postgres to accept connections (simple retry loop)
     let mut connected = false;

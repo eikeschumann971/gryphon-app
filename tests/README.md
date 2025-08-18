@@ -86,5 +86,6 @@ This test validates `PostgresGraphStore` end-to-end. Two approaches are supporte
 ---
 
 If you want, I can also:
+
 - Add a small Makefile or test script to simplify starting/stopping the Postgres container and running the integration test.
 - Re-adapt the integration test to auto-start containers via `testcontainers` instead of relying on an externally started container.
