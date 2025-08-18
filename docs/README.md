@@ -13,8 +13,9 @@ The Gryphon App is a sophisticated multi-agent system built using Domain-Driven 
 - **Projections**: Read models are built from events for querying
 
 ### Event Sourcing
+
 - All state changes are stored as immutable events
-- Kafka is used as the event store for scalability and durability
+- Kafka is used as the event store for scalability and durability (KRaft mode - no Zookeeper required)
 - PostgreSQL stores snapshots for performance optimization
 
 ### Domains
@@ -66,14 +67,46 @@ Provides user interface capabilities:
 
 ## Getting Started
 
-1. Ensure Kafka and PostgreSQL are running
-2. Update `config.toml` with your database and Kafka settings
-3. Run the application: `cargo run`
-4. Run tests: `cargo test`
+1. **Start Infrastructure (Kafka with KRaft + PostgreSQL):**
+
+   ```bash
+   docker-compose up -d
+   ```
+
+2. **Create Kafka Topics:**
+
+   ```bash
+   # Wait for Kafka to be ready, then create topics
+   ./scripts/kafka-setup.sh
+   ```
+
+3. **Update configuration if needed:**
+
+   ```bash
+   # Edit config.toml with your specific settings
+   ```
+
+4. **Run the application:**
+
+   ```bash
+   cargo run
+   ```
+
+5. **Run tests:**
+
+   ```bash
+   cargo test
+   ```
+
+## Infrastructure Components
+
+- PostgreSQL database for snapshot storage
+- Kafka broker settings and topics
 
 ## Configuration
 
 See `config.toml` for configuration options including:
+
 - Kafka broker settings and topics
 - PostgreSQL connection parameters
 - Event store configuration

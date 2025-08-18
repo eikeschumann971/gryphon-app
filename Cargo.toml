@@ -2,7 +2,7 @@
 name = "gryphon-app"
 version = "0.1.0"
 edition = "2021"
-authors = ["Your Name <your.email@example.com>"]
+authors = ["Eike Schumann <eike.schumann@gmail.com>"]
 description = "A DDD-based event-sourced application for autonomous agent management"
 
 [dependencies]
