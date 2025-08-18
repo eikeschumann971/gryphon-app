@@ -1,0 +1,24 @@
+[kafka]
+brokers = ["localhost:9092"]
+client_id = "gryphon-app"
+group_id = "gryphon-app-group"
+
+[kafka.topics]
+logical_agent_events = "logical-agent-events"
+technical_agent_events = "technical-agent-events"
+kinematic_agent_events = "kinematic-agent-events"
+path_planning_events = "path-planning-events"
+dynamics_events = "dynamics-events"
+gui_events = "gui-events"
+
+[postgres]
+host = "localhost"
+port = 5432
+database = "gryphon_app"
+username = "postgres"
+password = "password"
+max_connections = 10
+
+[event_store]
+snapshot_frequency = 100
+batch_size = 50
