@@ -4,8 +4,8 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 pub struct LogicalAgentService {
-    event_store: Arc<dyn EventStore + Send + Sync>,
-    snapshot_store: Arc<dyn SnapshotStore + Send + Sync>,
+    _event_store: Arc<dyn EventStore + Send + Sync>,
+    _snapshot_store: Arc<dyn SnapshotStore + Send + Sync>,
     command_actor: LogicalAgentCommandActor,
 }
 
@@ -16,8 +16,8 @@ impl LogicalAgentService {
         command_actor: LogicalAgentCommandActor,
     ) -> Self {
         Self {
-            event_store,
-            snapshot_store,
+            _event_store: event_store,
+            _snapshot_store: snapshot_store,
             command_actor,
         }
     }

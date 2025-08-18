@@ -5,8 +5,8 @@ use crate::domains::path_planning::events::PathPlanningEvent;
 use chrono::Utc;
 use uuid::Uuid;
 use crate::domains::path_planning::types::{Position2D, PathPlanRequest, PlanningAlgorithm};
-use crate::domains::path_planning::worker::{PathPlanWorker, WorkerStatus, PlanAssignment};
-use crate::domains::path_planning::plan::{PathPlan, PlanStatus};
+use crate::domains::path_planning::worker::{PathPlanWorker, PlanAssignment};
+use crate::domains::path_planning::plan::PathPlan;
 use crate::domains::path_planning::workspace::{Workspace, WorkspaceBounds};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -182,7 +182,7 @@ impl PathPlanner {
         Ok(())
     }
 
-    fn is_position_in_workspace(&self, position: &Position2D) -> bool {
+    pub fn is_position_in_workspace(&self, position: &Position2D) -> bool {
         let bounds = &self.workspace.bounds;
         position.x >= bounds.min_x && position.x <= bounds.max_x &&
         position.y >= bounds.min_y && position.y <= bounds.max_y

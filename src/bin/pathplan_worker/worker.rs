@@ -3,7 +3,6 @@ use crate::mock::{simulate_receive_work, simulate_send_result};
 use gryphon_app::domains::path_planning::*;
 use uuid::Uuid;
 use std::time::Duration;
-use tokio::time::sleep;
 
 pub struct AStarPathPlanWorker {
     pub worker_id: String,

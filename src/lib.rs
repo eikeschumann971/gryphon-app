@@ -1,3 +1,5 @@
+#![allow(ambiguous_glob_reexports)]
+
 pub mod adapters;
 pub mod application;
 pub mod common;
