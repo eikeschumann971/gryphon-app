@@ -2,7 +2,6 @@ use crate::common::DomainEvent;
 use serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc};
 use super::aggregate::{PlanningAlgorithm, Position2D, Orientation2D};
-use crate::domains::kinematic_agent::Position3D;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum PathPlanningEvent {
@@ -26,14 +25,14 @@ pub enum PathPlanningEvent {
         planner_id: String,
         plan_id: String,
         agent_id: String,
-        start: Position3D,
-        goal: Position3D,
+        start: Position2D,
+        goal: Position2D,
         timestamp: DateTime<Utc>,
     },
     PlanCompleted {
         planner_id: String,
         plan_id: String,
-        waypoints: Vec<Position3D>,
+        waypoints: Vec<Position2D>,
         timestamp: DateTime<Utc>,
     },
     PlanFailed {

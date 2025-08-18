@@ -5,14 +5,16 @@ This document demonstrates how to use the new `RouteRequest` command in the path
 ## Overview
 
 The `RouteRequest` command allows agents to request path planning services by providing:
+
 - Agent identification
 - Start and destination positions (2D)
-- Start and destination orientations 
+- Start and destination orientations
 - Request metadata
 
 ## Data Structures
 
 ### RouteRequest
+
 ```rust
 pub struct RouteRequest {
     pub request_id: String,        // Unique identifier for this request
@@ -26,6 +28,7 @@ pub struct RouteRequest {
 ```
 
 ### Position2D
+
 ```rust
 pub struct Position2D {
     pub x: f64,
@@ -34,6 +37,7 @@ pub struct Position2D {
 ```
 
 ### Orientation2D
+
 ```rust
 pub struct Orientation2D {
     pub angle: f64, // Angle in radians

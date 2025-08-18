@@ -1,7 +1,6 @@
 use crate::common::{AggregateRoot, DomainResult, DomainError};
 use serde::{Deserialize, Serialize};
 use super::events::PathPlanningEvent;
-use crate::domains::kinematic_agent::Position3D;
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
@@ -57,30 +56,29 @@ pub struct Workspace {
 pub struct WorkspaceBounds {
     pub min_x: f64, pub max_x: f64,
     pub min_y: f64, pub max_y: f64,
-    pub min_z: f64, pub max_z: f64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Obstacle {
     pub id: String,
     pub shape: ObstacleShape,
-    pub position: Position3D,
+    pub position: Position2D,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ObstacleShape {
-    Sphere { radius: f64 },
-    Box { width: f64, height: f64, depth: f64 },
-    Cylinder { radius: f64, height: f64 },
+    Circle { radius: f64 },
+    Rectangle { width: f64, height: f64 },
+    Polygon { vertices: Vec<Position2D> },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PathPlan {
     pub id: String,
     pub agent_id: String,
-    pub start: Position3D,
-    pub goal: Position3D,
-    pub waypoints: Vec<Position3D>,
+    pub start: Position2D,
+    pub goal: Position2D,
+    pub waypoints: Vec<Position2D>,
     pub status: PlanStatus,
 }
 
@@ -101,7 +99,6 @@ impl PathPlanner {
                 bounds: WorkspaceBounds {
                     min_x: -100.0, max_x: 100.0,
                     min_y: -100.0, max_y: 100.0,
-                    min_z: 0.0, max_z: 50.0,
                 },
                 obstacles: Vec::new(),
             },
@@ -138,27 +135,12 @@ impl PathPlanner {
         // Generate a unique plan ID
         let plan_id = Uuid::new_v4().to_string();
 
-        // Convert 2D positions to 3D for internal processing (assuming z=0 for ground-level planning)
-        let start_3d = Position3D {
-            x: route_request.start_position.x,
-            y: route_request.start_position.y,
-            z: 0.0,
-            timestamp: route_request.created_at,
-        };
-
-        let goal_3d = Position3D {
-            x: route_request.destination_position.x,
-            y: route_request.destination_position.y,
-            z: 0.0,
-            timestamp: route_request.created_at,
-        };
-
         // Create and add the new plan to active plans
         let _path_plan = PathPlan {
             id: plan_id.clone(),
             agent_id: route_request.agent_id.clone(),
-            start: start_3d.clone(),
-            goal: goal_3d.clone(),
+            start: route_request.start_position.clone(),
+            goal: route_request.destination_position.clone(),
             waypoints: Vec::new(), // Will be populated when planning completes
             status: PlanStatus::Planning,
         };
@@ -205,30 +187,14 @@ impl AggregateRoot for PathPlanner {
                 agent_id, 
                 start_position, 
                 destination_position, 
-                timestamp,
                 .. 
             } => {
-                // Convert 2D positions to 3D for internal storage
-                let start_3d = Position3D {
-                    x: start_position.x,
-                    y: start_position.y,
-                    z: 0.0,
-                    timestamp: *timestamp,
-                };
-
-                let goal_3d = Position3D {
-                    x: destination_position.x,
-                    y: destination_position.y,
-                    z: 0.0,
-                    timestamp: *timestamp,
-                };
-
                 // Create new path plan and add to active plans
                 let path_plan = PathPlan {
                     id: plan_id.clone(),
                     agent_id: agent_id.clone(),
-                    start: start_3d,
-                    goal: goal_3d,
+                    start: start_position.clone(),
+                    goal: destination_position.clone(),
                     waypoints: Vec::new(),
                     status: PlanStatus::Planning,
                 };
