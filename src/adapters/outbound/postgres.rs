@@ -3,7 +3,6 @@ use crate::config::PostgresConfig;
 use async_trait::async_trait;
 use deadpool_postgres::{Config, Pool, Runtime};
 use tokio_postgres::NoTls;
-use uuid::Uuid;
 
 pub struct PostgresSnapshotStore {
     pool: Pool,
@@ -101,29 +100,26 @@ impl SnapshotStore for PostgresSnapshotStore {
         let client = self.pool.get().await
             .map_err(|e| format!("Failed to get database connection: {}", e))?;
 
-        let (query, params): (&str, Vec<&(dyn tokio_postgres::types::ToSql + Sync)>) = 
-            if let Some(max_ver) = max_version {
-                (
-                    "SELECT snapshot_id, aggregate_id, aggregate_type, aggregate_version, snapshot_data, created_at 
-                     FROM snapshots 
-                     WHERE aggregate_id = $1 AND aggregate_version <= $2 
-                     ORDER BY aggregate_version DESC 
-                     LIMIT 1",
-                    vec![&aggregate_id, &(max_ver as i64)],
-                )
-            } else {
-                (
-                    "SELECT snapshot_id, aggregate_id, aggregate_type, aggregate_version, snapshot_data, created_at 
-                     FROM snapshots 
-                     WHERE aggregate_id = $1 
-                     ORDER BY aggregate_version DESC 
-                     LIMIT 1",
-                    vec![&aggregate_id],
-                )
-            };
-
-        let row = client.query_opt(query, &params).await
-            .map_err(|e| format!("Failed to load snapshot: {}", e))?;
+        let row = if let Some(max_ver) = max_version {
+            let max_ver_i64 = max_ver as i64;
+            client.query_opt(
+                "SELECT snapshot_id, aggregate_id, aggregate_type, aggregate_version, snapshot_data, created_at 
+                 FROM snapshots 
+                 WHERE aggregate_id = $1 AND aggregate_version <= $2 
+                 ORDER BY aggregate_version DESC 
+                 LIMIT 1",
+                &[&aggregate_id, &max_ver_i64]
+            ).await
+        } else {
+            client.query_opt(
+                "SELECT snapshot_id, aggregate_id, aggregate_type, aggregate_version, snapshot_data, created_at 
+                 FROM snapshots 
+                 WHERE aggregate_id = $1 
+                 ORDER BY aggregate_version DESC 
+                 LIMIT 1",
+                &[&aggregate_id]
+            ).await
+        }.map_err(|e| format!("Failed to load snapshot: {}", e))?;
 
         if let Some(row) = row {
             Ok(Some(Snapshot {

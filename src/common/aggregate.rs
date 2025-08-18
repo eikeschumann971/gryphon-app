@@ -46,7 +46,7 @@ impl<T: AggregateRoot> AggregateStore<T> {
         self.uncommitted_events.clear();
     }
 
-    pub fn load_from_history(mut aggregate: T, events: Vec<T::Event>) -> DomainResult<Self> {
+    pub fn load_from_history(aggregate: T, events: Vec<T::Event>) -> DomainResult<Self> {
         let mut store = Self::new(aggregate);
         
         for event in events {

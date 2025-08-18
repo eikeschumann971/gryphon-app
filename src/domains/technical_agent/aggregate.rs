@@ -1,4 +1,4 @@
-use crate::common::{AggregateRoot, DomainResult, DomainError};
+use crate::common::{AggregateRoot, DomainResult};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use super::events::TechnicalAgentEvent;

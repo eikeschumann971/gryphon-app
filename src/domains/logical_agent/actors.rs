@@ -1,4 +1,4 @@
-use crate::common::{EventStore, EventEnvelope, EventMetadata};
+use crate::common::{EventStore, EventEnvelope, EventMetadata, DomainEvent};
 use super::events::LogicalAgentEvent;
 use super::projections::{LogicalAgentOverview, ObjectiveProjection, KnowledgeBaseAnalytics};
 use tokio::sync::{mpsc, RwLock};

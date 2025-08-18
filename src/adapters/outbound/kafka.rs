@@ -4,8 +4,7 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use rdkafka::config::ClientConfig;
 use rdkafka::producer::{FutureProducer, FutureRecord};
-use rdkafka::consumer::{Consumer, StreamConsumer};
-use rdkafka::Message;
+use rdkafka::consumer::StreamConsumer;
 use serde_json;
 use std::time::Duration;
 
@@ -59,7 +58,7 @@ impl EventStore for KafkaEventStore {
     async fn append_events(
         &self,
         aggregate_id: &str,
-        expected_version: u64,
+        _expected_version: u64,
         events: Vec<EventEnvelope>,
     ) -> Result<(), String> {
         for event in events {
@@ -84,8 +83,8 @@ impl EventStore for KafkaEventStore {
 
     async fn load_events(
         &self,
-        aggregate_id: &str,
-        from_version: u64,
+        _aggregate_id: &str,
+        _from_version: u64,
     ) -> Result<Vec<EventEnvelope>, String> {
         // Note: This is a simplified implementation
         // In a real-world scenario, you'd need to implement proper event replay
@@ -101,8 +100,8 @@ impl EventStore for KafkaEventStore {
 
     async fn load_events_by_type(
         &self,
-        event_type: &str,
-        from_timestamp: Option<DateTime<Utc>>,
+        _event_type: &str,
+        _from_timestamp: Option<DateTime<Utc>>,
     ) -> Result<Vec<EventEnvelope>, String> {
         // Similar to load_events, this would require implementing
         // proper event querying capabilities

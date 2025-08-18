@@ -1,5 +1,4 @@
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 use chrono::{DateTime, Utc};
 use super::events::TechnicalAgentEvent;
 use super::aggregate::{AgentType, TechnicalStatus};

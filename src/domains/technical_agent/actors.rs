@@ -1,4 +1,4 @@
-use crate::common::{EventStore, EventEnvelope, EventMetadata};
+use crate::common::{EventStore, EventEnvelope, EventMetadata, DomainEvent};
 use super::events::TechnicalAgentEvent;
 use super::projections::TechnicalAgentOverview;
 use super::aggregate::AgentType;

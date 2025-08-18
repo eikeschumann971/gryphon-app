@@ -226,6 +226,9 @@ impl AggregateRoot for LogicalAgent {
                 self.knowledge_base.facts.push(fact);
                 self.knowledge_base.last_updated = chrono::Utc::now();
             }
+            _ => {
+                // Handle other events as needed
+            }
         }
         self.version += 1;
         Ok(())

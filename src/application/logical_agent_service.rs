@@ -1,5 +1,5 @@
 use crate::common::{ApplicationResult, EventStore, SnapshotStore};
-use crate::domains::logical_agent::{LogicalAgent, LogicalAgentEvent, LogicalAgentCommandActor};
+use crate::domains::logical_agent::LogicalAgentCommandActor;
 use std::sync::Arc;
 use uuid::Uuid;
 
