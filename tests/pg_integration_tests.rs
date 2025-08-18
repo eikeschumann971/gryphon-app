@@ -6,10 +6,6 @@ use gryphon_app::adapters::outbound::path_planning_data::FilesystemDataSource;
 use deadpool_postgres::Config as DeadPoolConfig;
 #[cfg(feature = "pg_integration")]
 use tokio_postgres::NoTls;
-#[cfg(feature = "use_testcontainers")]
-use testcontainers::clients::Cli;
-#[cfg(feature = "use_testcontainers")]
-use testcontainers_modules::postgres::Postgres;
 
 #[cfg(feature = "pg_integration")]
 #[tokio::test]
@@ -19,26 +15,12 @@ async fn test_postgres_graph_store_roundtrip() -> Result<(), Box<dyn std::error:
     // optional dev feature `use_testcontainers` is enabled the test will start a
     // container in-process using the `testcontainers` crate.
 
-    let (host, port, user, password, db) = {
-        #[cfg(feature = "use_testcontainers")]
-        {
-            // Start a Postgres container using testcontainers (self-contained)
-            let docker = Cli::default();
-            let node = docker.run(Postgres::default());
-            let port = node.get_host_port_ipv4(5432);
-            ("127.0.0.1".to_string(), port, "postgres".to_string(), "postgres".to_string(), "postgres".to_string())
-        }
-        #[cfg(not(feature = "use_testcontainers"))]
-        {
-            // Use environment variables set by the helper script or CI. Defaults to localhost:5432
-            let host = std::env::var("PG_TEST_HOST").unwrap_or_else(|_| "127.0.0.1".to_string());
-            let port = std::env::var("PG_TEST_PORT").ok().and_then(|s| s.parse::<u16>().ok()).unwrap_or(5432);
-            let user = std::env::var("PG_TEST_USER").unwrap_or_else(|_| "postgres".to_string());
-            let password = std::env::var("PG_TEST_PASSWORD").unwrap_or_else(|_| "postgres".to_string());
-            let db = std::env::var("PG_TEST_DB").unwrap_or_else(|_| "postgres".to_string());
-            (host, port, user, password, db)
-        }
-    };
+    // Use environment variables set by the helper script or CI. Defaults to localhost:5432
+    let host = std::env::var("PG_TEST_HOST").unwrap_or_else(|_| "127.0.0.1".to_string());
+    let port = std::env::var("PG_TEST_PORT").ok().and_then(|s| s.parse::<u16>().ok()).unwrap_or(5432);
+    let user = std::env::var("PG_TEST_USER").unwrap_or_else(|_| "postgres".to_string());
+    let password = std::env::var("PG_TEST_PASSWORD").unwrap_or_else(|_| "postgres".to_string());
+    let db = std::env::var("PG_TEST_DB").unwrap_or_else(|_| "postgres".to_string());
 
     let conn_str = format!("host={} port={} user={} password={} dbname={}", host, port, user, password, db);
 

@@ -116,7 +116,7 @@ impl AggregateRoot for PathPlanner {
 			}
 			PathPlanningEvent::PlanFailed { plan_id, worker_id, .. } => {
 				if let Some(plan) = self.active_plans.iter_mut().find(|p| p.id == *plan_id) {
-					plan.status = PlanStatus::Failed(format!("Planning failed"));
+					plan.status = PlanStatus::Failed("Planning failed".to_string());
 				}
 				self.plan_assignments.retain(|a| a.plan_id != *plan_id);
 				if let Some(wid) = worker_id {

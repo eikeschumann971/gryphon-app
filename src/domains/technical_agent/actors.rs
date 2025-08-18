@@ -77,18 +77,24 @@ impl TechnicalAgentProjectionStore {
         }
     }
 
+}
+
+impl Default for TechnicalAgentProjectionStore {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl TechnicalAgentProjectionStore {
     pub fn apply_event(&mut self, event: &TechnicalAgentEvent) {
-        match event {
-            TechnicalAgentEvent::AgentCreated { agent_id, name, agent_type, timestamp, .. } => {
-                let overview = TechnicalAgentOverview::new(
-                    agent_id.clone(), 
-                    name.clone(), 
-                    agent_type.clone(), 
-                    *timestamp
-                );
-                self.agent_overviews.insert(agent_id.clone(), overview);
-            }
-            _ => {}
+        if let TechnicalAgentEvent::AgentCreated { agent_id, name, agent_type, timestamp, .. } = event {
+            let overview = TechnicalAgentOverview::new(
+                agent_id.clone(), 
+                name.clone(), 
+                agent_type.clone(), 
+                *timestamp
+            );
+            self.agent_overviews.insert(agent_id.clone(), overview);
         }
 
         if let Some(overview) = self.agent_overviews.get_mut(event.aggregate_id()) {

@@ -15,7 +15,7 @@ impl GUIService {
         self.command_actor
             .create_application(app_id, name)
             .await
-            .map_err(|e| crate::common::ApplicationError::EventStore(e))?;
+            .map_err(crate::common::ApplicationError::EventStore)?;
         Ok(())
     }
 }

@@ -26,7 +26,7 @@ impl LogicalAgentService {
         self.command_actor
             .create_agent(agent_id, name)
             .await
-            .map_err(|e| crate::common::ApplicationError::EventStore(e))?;
+            .map_err(crate::common::ApplicationError::EventStore)?;
         
         Ok(())
     }
@@ -41,7 +41,7 @@ impl LogicalAgentService {
         let objective_id = self.command_actor
             .add_objective(agent_id, description, priority, constraints)
             .await
-            .map_err(|e| crate::common::ApplicationError::EventStore(e))?;
+            .map_err(crate::common::ApplicationError::EventStore)?;
         
         Ok(objective_id)
     }
@@ -50,7 +50,7 @@ impl LogicalAgentService {
         self.command_actor
             .complete_objective(agent_id, objective_id)
             .await
-            .map_err(|e| crate::common::ApplicationError::EventStore(e))?;
+            .map_err(crate::common::ApplicationError::EventStore)?;
         
         Ok(())
     }

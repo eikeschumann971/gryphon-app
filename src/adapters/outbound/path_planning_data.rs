@@ -207,7 +207,8 @@ impl FilesystemDataSource {
                                 let nx = NotNan::new(x).map_err(|e| DomainError::InfrastructureError(format!("non-finite coord: {}", e)))?;
                                 let ny = NotNan::new(y).map_err(|e| DomainError::InfrastructureError(format!("non-finite coord: {}", e)))?;
                                 let key = (nx,ny);
-                                if !coord_index_map.contains_key(&key) { let ni = graph.add_node(Coord(x,y)); coord_index_map.insert(key, ni); }
+                                // use entry API to avoid contains_key followed by insert
+                                let _ = *coord_index_map.entry(key).or_insert_with(|| graph.add_node(Coord(x,y)));
                             }
                         }
                         _ => { /* skip unsupported geometries for now */ }

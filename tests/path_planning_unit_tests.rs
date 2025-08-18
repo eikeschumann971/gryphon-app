@@ -542,7 +542,7 @@ mod position_and_orientation_tests {
 
     #[test]
     fn test_orientation2d_serialization() {
-        let orientation = Orientation2D { angle: 3.14159 };
+        let orientation = Orientation2D { angle: std::f64::consts::PI };
         let serialized = serde_json::to_string(&orientation).unwrap();
         let deserialized: Orientation2D = serde_json::from_str(&serialized).unwrap();
         assert_eq!(orientation.angle, deserialized.angle);

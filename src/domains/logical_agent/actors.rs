@@ -99,6 +99,15 @@ impl LogicalAgentProjectionStore {
         }
     }
 
+}
+
+impl Default for LogicalAgentProjectionStore {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl LogicalAgentProjectionStore {
     pub fn apply_event(&mut self, event: &LogicalAgentEvent) {
         match event {
             LogicalAgentEvent::AgentCreated { agent_id, name, timestamp, .. } => {

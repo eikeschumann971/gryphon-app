@@ -15,7 +15,7 @@ impl DynamicsService {
         self.command_actor
             .create_simulator(simulator_id, physics_model)
             .await
-            .map_err(|e| crate::common::ApplicationError::EventStore(e))?;
+            .map_err(crate::common::ApplicationError::EventStore)?;
         Ok(())
     }
 }

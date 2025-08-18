@@ -15,7 +15,7 @@ impl TechnicalAgentService {
         self.command_actor
             .create_agent(agent_id, name, agent_type)
             .await
-            .map_err(|e| crate::common::ApplicationError::EventStore(e))?;
+            .map_err(crate::common::ApplicationError::EventStore)?;
         Ok(())
     }
 }

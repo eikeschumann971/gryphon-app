@@ -15,7 +15,7 @@ impl KinematicAgentService {
         self.command_actor
             .create_agent(agent_id, initial_position, kinematics_model)
             .await
-            .map_err(|e| crate::common::ApplicationError::EventStore(e))?;
+            .map_err(crate::common::ApplicationError::EventStore)?;
         Ok(())
     }
 }

@@ -49,8 +49,10 @@ impl Config {
         let config: Config = toml::from_str(&content)?;
         Ok(config)
     }
+}
 
-    pub fn default() -> Self {
+impl Default for Config {
+    fn default() -> Self {
         Self {
             kafka: KafkaConfig {
                 brokers: vec!["localhost:9092".to_string()],

@@ -22,7 +22,7 @@ impl PathPlanningService {
         self.command_actor
             .create_planner(planner_id, algorithm)
             .await
-            .map_err(|e| crate::common::ApplicationError::EventStore(e))?;
+            .map_err(crate::common::ApplicationError::EventStore)?;
         Ok(())
     }
 

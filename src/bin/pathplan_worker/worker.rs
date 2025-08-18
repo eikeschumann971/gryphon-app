@@ -24,10 +24,12 @@ impl AStarPathPlanWorker {
             println!("📡 Worker {} waiting for path planning requests...", self.worker_id);
             tokio::time::sleep(Duration::from_secs(5)).await;
             if let Some(path_plan_request) = simulate_receive_work().await {
-                println!("🎯 Worker {} received planning request: {} -> {}", 
-                         self.worker_id, 
-                         format!("({:.1}, {:.1})", path_plan_request.start_position.x, path_plan_request.start_position.y),
-                         format!("({:.1}, {:.1})", path_plan_request.destination_position.x, path_plan_request.destination_position.y));
+                println!(
+                    "🎯 Worker {} received planning request: {} -> {}",
+                    self.worker_id,
+                    format_args!("({:.1}, {:.1})", path_plan_request.start_position.x, path_plan_request.start_position.y),
+                    format_args!("({:.1}, {:.1})", path_plan_request.destination_position.x, path_plan_request.destination_position.y),
+                );
                 let waypoints = plan_path_astar(&path_plan_request).await?;
                 println!("✅ Worker {} completed path with {} waypoints", 
                          self.worker_id, waypoints.len());

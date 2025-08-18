@@ -94,7 +94,7 @@ impl KinematicAgent {
             constraints: MovementConstraints {
                 max_velocity: 10.0,
                 max_acceleration: 5.0,
-                max_angular_velocity: 3.14,
+                max_angular_velocity: std::f64::consts::PI,
                 min_turning_radius: 1.0,
                 workspace_bounds: WorkspaceBounds {
                     min_x: -100.0, max_x: 100.0,
