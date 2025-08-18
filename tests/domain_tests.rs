@@ -81,6 +81,13 @@ async fn test_path_planner_route_request() {
     assert_eq!(planner.active_plans[0].start.y, 20.0);
     assert_eq!(planner.active_plans[0].goal.x, 50.0);
     assert_eq!(planner.active_plans[0].goal.y, 80.0);
+    
+    // Check orientations are properly set
+    assert_eq!(planner.active_plans[0].start_orientation.angle, 0.0);
+    assert_eq!(planner.active_plans[0].destination_orientation.angle, 1.57);
+    
+    // Check that created_at timestamp is set
+    assert!(planner.active_plans[0].created_at <= chrono::Utc::now());
 }
 
 #[tokio::test]

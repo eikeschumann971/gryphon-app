@@ -78,8 +78,11 @@ pub struct PathPlan {
     pub agent_id: String,
     pub start: Position2D,
     pub goal: Position2D,
+    pub start_orientation: Orientation2D,
+    pub destination_orientation: Orientation2D,
     pub waypoints: Vec<Position2D>,
     pub status: PlanStatus,
+    pub created_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -135,17 +138,7 @@ impl PathPlanner {
         // Generate a unique plan ID
         let plan_id = Uuid::new_v4().to_string();
 
-        // Create and add the new plan to active plans
-        let _path_plan = PathPlan {
-            id: plan_id.clone(),
-            agent_id: route_request.agent_id.clone(),
-            start: route_request.start_position.clone(),
-            goal: route_request.destination_position.clone(),
-            waypoints: Vec::new(), // Will be populated when planning completes
-            status: PlanStatus::Planning,
-        };
-
-        // Emit the RouteRequested event
+        // Emit the RouteRequested event - let apply() handle state changes
         let event = PathPlanningEvent::RouteRequested {
             planner_id: self.id.clone(),
             request_id: route_request.request_id,
@@ -186,7 +179,10 @@ impl AggregateRoot for PathPlanner {
                 plan_id, 
                 agent_id, 
                 start_position, 
-                destination_position, 
+                destination_position,
+                start_orientation,
+                destination_orientation,
+                timestamp,
                 .. 
             } => {
                 // Create new path plan and add to active plans
@@ -195,8 +191,11 @@ impl AggregateRoot for PathPlanner {
                     agent_id: agent_id.clone(),
                     start: start_position.clone(),
                     goal: destination_position.clone(),
+                    start_orientation: start_orientation.clone(),
+                    destination_orientation: destination_orientation.clone(),
                     waypoints: Vec::new(),
                     status: PlanStatus::Planning,
+                    created_at: *timestamp,
                 };
 
                 self.active_plans.push(path_plan);
