@@ -6,9 +6,8 @@ use std::f64::consts::TAU;
 /// Communication module for A* worker to interact with the planner service
 /// In a real system, this would use proper IPC/network communication
 /// For this example, we simulate the communication patterns
-
-#[derive(Debug, Clone)]
 #[allow(dead_code)]
+#[derive(Debug, Clone)]
 pub enum WorkerMessage {
     RegisterWorker {
         worker_id: String,
@@ -59,6 +58,7 @@ pub struct WorkerCommunication {
     assignment_sender: mpsc::Sender<PlannerMessage>,
 }
 
+#[allow(dead_code)]
 impl WorkerCommunication {
     pub fn new(worker_id: String) -> Self {
         let (message_sender, _message_receiver) = mpsc::channel(100);

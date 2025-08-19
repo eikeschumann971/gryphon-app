@@ -1,22 +1,26 @@
 use gryphon_app::domains::path_planning::*;
+use gryphon_app::adapters::inbound::file_event_store::FileEventStore;
+use gryphon_app::common::{EventStore, EventEnvelope, EventMetadata, DomainEvent};
+use gryphon_app::config::Config;
 use tokio::time::{sleep, Duration};
 use uuid::Uuid;
 use chrono::Utc;
 use rand::Rng;
 use std::f64::consts::PI;
+use std::sync::Arc;
 
 /// Path Planning Client Process
 /// 
-/// This process simulates clients making path planning requests.
-/// It generates realistic path planning scenarios and sends them to the planner service.
+/// This process simulates clients making path planning requests using the event-driven architecture.
+/// It publishes PathPlanRequested events to the event store and demonstrates realistic scenarios.
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    println!("🚀 Starting Path Planning Client");
+    println!("🚀 Starting Path Planning Client (Event-Driven)");
     
     // Initialize tracing
     tracing_subscriber::fmt::init();
     
-    let client = PathPlanClient::new().await;
+    let client = PathPlanClient::new().await?;
     client.run().await?;
     
     Ok(())
@@ -24,6 +28,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 pub struct PathPlanClient {
     scenarios: Vec<PlanningScenario>,
+    event_store: Arc<dyn EventStore>,
+    planner_id: String,
 }
 
 #[derive(Debug, Clone)]
@@ -38,7 +44,17 @@ pub struct PlanningScenario {
 }
 
 impl PathPlanClient {
-    pub async fn new() -> Self {
+    pub async fn new() -> Result<Self, Box<dyn std::error::Error>> {
+        // For demo purposes, use default config and in-memory event store
+        let _config = Config::default();
+        println!("📋 Using default configuration for demo");
+
+        // Initialize event store - use file-based store for demo so all processes can share events
+        let event_store: Arc<dyn EventStore> = Arc::new(FileEventStore::new("/tmp/gryphon-events"));
+        println!("✅ Using file-based event store for demo (shared between processes)");
+
+        let planner_id = "main-path-planner".to_string();
+        
         let scenarios = vec![
             PlanningScenario {
                 name: "Office Navigation".to_string(),
@@ -87,7 +103,11 @@ impl PathPlanClient {
             },
         ];
         
-        Self { scenarios }
+        Ok(Self { 
+            scenarios,
+            event_store,
+            planner_id,
+        })
     }
     
     pub async fn run(&self) -> Result<(), Box<dyn std::error::Error>> {
@@ -198,7 +218,7 @@ impl PathPlanClient {
     }
     
     async fn send_path_plan_request(&self, request: PathPlanRequest) -> Result<(), Box<dyn std::error::Error>> {
-        println!("📤 Sending path plan request:");
+        println!("📤 Publishing path plan request event:");
         println!("   🆔 Request ID: {}", request.request_id);
         println!("   🤖 Agent: {}", request.agent_id);
         println!("   📍 Start: ({:.1}, {:.1}) @ {:.2}rad", 
@@ -211,39 +231,89 @@ impl PathPlanClient {
                        (request.destination_position.y - request.start_position.y).powi(2)).sqrt();
         println!("   📏 Distance: {:.1} units", distance);
         
-        // In a real system, this would send the request to the planner service
-        // For now, we'll simulate the network delay and just log
-        println!("   📡 Sending to planner service...");
-        sleep(Duration::from_millis(100)).await;
+        // Create the domain event
+        let plan_id = format!("plan-{}", Uuid::new_v4());
+        let event = PathPlanningEvent::PathPlanRequested {
+            planner_id: self.planner_id.clone(),
+            request_id: request.request_id.clone(),
+            plan_id: plan_id.clone(),
+            agent_id: request.agent_id.clone(),
+            start_position: request.start_position.clone(),
+            destination_position: request.destination_position.clone(),
+            start_orientation: request.start_orientation.clone(),
+            destination_orientation: request.destination_orientation.clone(),
+            timestamp: Utc::now(),
+        };
+
+        // Create event envelope
+        let event_envelope = EventEnvelope {
+            event_id: Uuid::new_v4(),
+            aggregate_id: self.planner_id.clone(),
+            aggregate_type: "PathPlanner".to_string(),
+            event_type: event.event_type().to_string(),
+            event_version: 1,
+            event_data: serde_json::to_value(&event)?,
+            metadata: EventMetadata {
+                correlation_id: Some(Uuid::new_v4()),
+                causation_id: None,
+                user_id: Some(request.agent_id.clone()),
+                source: "pathplan_client".to_string(),
+            },
+            occurred_at: Utc::now(),
+        };
+
+        // Publish to event store
+        println!("   📡 Publishing event to event store...");
         
-        println!("   ✅ Request sent successfully!");
+        // Load current version (for this demo, we'll use 0 as we're not implementing full event sourcing)
+        let current_version = 0;
         
-        // Simulate waiting for response
-        println!("   ⏳ Waiting for response...");
-        sleep(Duration::from_millis(500)).await;
-        
-        // Simulate response (in real system this would come from the planner)
-        self.simulate_response(&request).await;
+        match self.event_store.append_events(
+            &self.planner_id,
+            current_version,
+            vec![event_envelope]
+        ).await {
+            Ok(_) => {
+                println!("   ✅ Event published successfully!");
+                println!("   🎯 Plan ID: {}", plan_id);
+                println!("   📝 Event: PathPlanRequested");
+                
+                // Simulate processing time
+                sleep(Duration::from_millis(100)).await;
+                
+                // In a real system, we would listen for response events
+                // For this demo, we'll simulate the response
+                self.simulate_event_response(&request, &plan_id).await;
+            }
+            Err(e) => {
+                println!("   ❌ Failed to publish event: {}", e);
+                return Err(e.into());
+            }
+        }
         
         Ok(())
     }
     
-    async fn simulate_response(&self, request: &PathPlanRequest) {
-        // Simulate different response types
+    async fn simulate_event_response(&self, request: &PathPlanRequest, plan_id: &str) {
+        // Simulate waiting for event-driven response
+        println!("   ⏳ Waiting for response events...");
+        sleep(Duration::from_millis(500)).await;
+        
+        // Simulate different response events
         let mut rng = rand::thread_rng();
         let response_type = rng.gen_range(1..=10);
         
         match response_type {
             1..=7 => {
-                // Success case (70% probability)
-                println!("   🎉 Response: Request accepted and plan assigned to worker");
+                // Success case (70% probability) - simulate PlanCompleted event
+                println!("   🎉 Event received: PlanAssigned to worker");
                 sleep(Duration::from_millis(200)).await;
-                println!("   🔄 Plan status: In progress...");
+                println!("   🔄 Event received: Worker processing plan...");
                 sleep(Duration::from_millis(800)).await;
                 
                 let waypoint_count = rng.gen_range(3..8);
-                println!("   ✅ Plan completed with {} waypoints!", waypoint_count);
-                println!("   📍 Sample waypoints:");
+                println!("   ✅ Event received: PlanCompleted with {} waypoints!", waypoint_count);
+                println!("   📍 Sample waypoints from completed plan:");
                 
                 // Generate sample waypoints
                 for i in 1..=waypoint_count.min(3) {
@@ -255,17 +325,22 @@ impl PathPlanClient {
                 if waypoint_count > 3 {
                     println!("      ... and {} more waypoints", waypoint_count - 3);
                 }
+                
+                // In a real system, we would publish a PlanCompleted event here
+                println!("   📝 Would publish: PlanCompleted event for plan {}", plan_id);
             },
             8..=9 => {
                 // No worker available (20% probability)
-                println!("   ⏳ Response: Request accepted, waiting for available worker...");
+                println!("   ⏳ Event received: Plan queued, waiting for available worker...");
                 sleep(Duration::from_millis(1000)).await;
-                println!("   ⚠️  No workers currently available, request queued");
+                println!("   ⚠️  Event received: No workers currently available");
+                println!("   📝 Plan {} remains in queue", plan_id);
             },
             _ => {
                 // Validation error (10% probability)
-                println!("   ❌ Response: Request rejected - validation failed");
-                println!("      Error: Position outside workspace bounds or obstacle collision");
+                println!("   ❌ Event received: PlanFailed - validation error");
+                println!("      Reason: Position outside workspace bounds or obstacle collision");
+                println!("   📝 Would publish: PlanFailed event for plan {}", plan_id);
             }
         }
     }

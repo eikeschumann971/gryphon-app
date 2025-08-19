@@ -103,7 +103,7 @@ impl PathPlanner {
         let event = PathPlanningEvent::WorkerRegistered {
             planner_id: self.id.clone(),
             worker_id,
-            algorithm_capabilities,
+            capabilities: algorithm_capabilities,
             timestamp: Utc::now(),
         };
         self.add_event(event.clone());

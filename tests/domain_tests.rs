@@ -145,7 +145,7 @@ async fn test_path_planner_worker_registration() {
     
     if let PathPlanningEvent::WorkerRegistered { 
         worker_id: event_worker_id, 
-        algorithm_capabilities: event_capabilities,
+        capabilities: event_capabilities,
         .. 
     } = &planner.uncommitted_events()[1] {
         assert_eq!(*event_worker_id, worker_id);

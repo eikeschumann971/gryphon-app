@@ -2,6 +2,7 @@ use gryphon_app::domains::path_planning::*;
 use std::time::Duration;
 use tokio::time::sleep;
 
+#[allow(dead_code)]
 pub async fn plan_path_astar(path_plan_request: &PathPlanRequest) -> Result<Vec<Position2D>, Box<dyn std::error::Error>> {
     println!("🧠 Starting A* pathfinding from ({:.1}, {:.1}) to ({:.1}, {:.1})", 
              path_plan_request.start_position.x, path_plan_request.start_position.y,
@@ -10,6 +11,7 @@ pub async fn plan_path_astar(path_plan_request: &PathPlanRequest) -> Result<Vec<
     Ok(waypoints)
 }
 
+#[allow(dead_code)]
 async fn dummy_astar_algorithm(start: &Position2D, goal: &Position2D) -> Vec<Position2D> {
     let mut waypoints = Vec::new();
     println!("  🔍 Initializing A* search...");
