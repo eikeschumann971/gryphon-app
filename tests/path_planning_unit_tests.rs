@@ -49,7 +49,7 @@ mod path_planner_tests {
         // Check event was emitted
         assert_eq!(planner.uncommitted_events().len(), 2);
         match &planner.uncommitted_events()[1] {
-            PathPlanningEvent::WorkerRegistered { worker_id: event_worker_id, algorithm_capabilities: event_capabilities, .. } => {
+            PathPlanningEvent::WorkerRegistered { worker_id: event_worker_id, capabilities: event_capabilities, .. } => {
                 assert_eq!(*event_worker_id, worker_id);
                 assert_eq!(*event_capabilities, capabilities);
             }
@@ -469,7 +469,7 @@ mod path_planner_tests {
         let test_event = PathPlanningEvent::WorkerRegistered {
             planner_id: "planner-1".to_string(),
             worker_id: "test-worker".to_string(),
-            algorithm_capabilities: vec![PlanningAlgorithm::AStar],
+            capabilities: vec![PlanningAlgorithm::AStar],
             timestamp: Utc::now(),
         };
         
@@ -639,7 +639,7 @@ mod event_tests {
             PathPlanningEvent::WorkerRegistered {
                 planner_id: "planner-1".to_string(),
                 worker_id: "worker-1".to_string(),
-                algorithm_capabilities: vec![PlanningAlgorithm::AStar, PlanningAlgorithm::Dijkstra],
+                capabilities: vec![PlanningAlgorithm::AStar, PlanningAlgorithm::Dijkstra],
                 timestamp: Utc::now(),
             },
             PathPlanningEvent::WorkerReady {
