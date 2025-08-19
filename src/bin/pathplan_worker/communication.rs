@@ -1,12 +1,14 @@
 use gryphon_app::domains::path_planning::*;
 use tokio::sync::mpsc;
 use tokio::time::{sleep, Duration};
+use std::f64::consts::TAU;
 
 /// Communication module for A* worker to interact with the planner service
 /// In a real system, this would use proper IPC/network communication
 /// For this example, we simulate the communication patterns
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub enum WorkerMessage {
     RegisterWorker {
         worker_id: String,
@@ -37,6 +39,7 @@ pub enum WorkerMessage {
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub enum PlannerMessage {
     WorkAssignment {
         plan_id: String,
@@ -48,6 +51,7 @@ pub enum PlannerMessage {
     },
 }
 
+#[allow(dead_code)]
 pub struct WorkerCommunication {
     worker_id: String,
     message_sender: mpsc::Sender<WorkerMessage>,
@@ -202,10 +206,10 @@ impl WorkerCommunication {
                 y: rng.gen_range(-80.0..80.0),
             },
             start_orientation: Orientation2D {
-                angle: rng.gen_range(0.0..6.28),
+                angle: rng.gen_range(0.0..TAU),
             },
             destination_orientation: Orientation2D {
-                angle: rng.gen_range(0.0..6.28),
+                angle: rng.gen_range(0.0..TAU),
             },
             created_at: Utc::now(),
         }
