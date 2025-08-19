@@ -32,7 +32,7 @@ impl AStarPathPlanWorker {
         
         loop {
             // Load all PlanAssigned events from the shared event store
-            let plan_events = event_store.load_events_by_type("PlanAssigned", None).await?;
+            let plan_events = event_store.load_events_by_type("PlanAssigned").await?;
             
             if !plan_events.is_empty() {
                 println!("Found {} plan assignments to process", plan_events.len());
@@ -47,7 +47,7 @@ impl AStarPathPlanWorker {
                             .. 
                         } = event_data {
                             // Check if plan is already completed
-                            let completion_events = event_store.load_events_by_type("PlanCompleted", None).await?;
+                            let completion_events = event_store.load_events_by_type("PlanCompleted").await?;
                             
                             let already_completed = completion_events.iter().any(|completion_event| {
                                 if let Ok(completion_data) = serde_json::from_value::<PathPlanningEvent>(completion_event.event_data.clone()) {
@@ -92,7 +92,7 @@ impl AStarPathPlanWorker {
                                     metadata
                                 )?;
                                 
-                                event_store.append_events(&plan_id, 1, vec![completion_envelope]).await?;
+                                event_store.append_events(vec![completion_envelope]).await?;
                                 println!("✅ Plan completed and event published");
                             }
                         }

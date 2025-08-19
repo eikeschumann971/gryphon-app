@@ -26,11 +26,11 @@ impl AggregateRoot for PathPlanner {
 				};
 				self.active_plans.push(path_plan);
 			}
-			PathPlanningEvent::WorkerRegistered { worker_id, algorithm_capabilities, timestamp, .. } => {
+			PathPlanningEvent::WorkerRegistered { worker_id, capabilities, timestamp, .. } => {
 				let worker = PathPlanWorker {
 					worker_id: worker_id.clone(),
 					status: WorkerStatus::Idle,
-					algorithm_capabilities: algorithm_capabilities.clone(),
+					algorithm_capabilities: capabilities.clone(),
 					last_heartbeat: *timestamp,
 					current_plan_id: None,
 				};
@@ -44,6 +44,14 @@ impl AggregateRoot for PathPlanner {
 				}
 			}
 			PathPlanningEvent::WorkerBusy { worker_id, plan_id, timestamp, .. } => {
+				if let Some(worker) = self.registered_workers.iter_mut().find(|w| w.worker_id == *worker_id) {
+					worker.status = WorkerStatus::Busy;
+					worker.last_heartbeat = *timestamp;
+					worker.current_plan_id = Some(plan_id.clone());
+				}
+			}
+			PathPlanningEvent::WorkerProcessing { worker_id, plan_id, timestamp, .. } => {
+				// Similar to WorkerBusy - indicates worker is processing a plan
 				if let Some(worker) = self.registered_workers.iter_mut().find(|w| w.worker_id == *worker_id) {
 					worker.status = WorkerStatus::Busy;
 					worker.last_heartbeat = *timestamp;

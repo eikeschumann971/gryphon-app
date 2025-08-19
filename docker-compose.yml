@@ -36,20 +36,26 @@ services:
     volumes:
       - kafka_data:/tmp/kraft-combined-logs
       - ./scripts/kafka-setup.sh:/tmp/kafka-setup.sh
+    user: "0:0"  # Run as root to avoid permission issues
     command: >
       bash -c "
         echo 'Starting Kafka in KRaft mode...'
         
+        # Create and set permissions for log directory
+        mkdir -p /tmp/kraft-combined-logs
+        chown -R appuser:appuser /tmp/kraft-combined-logs
+        
         # Format storage if needed
         if [ ! -f /tmp/kraft-combined-logs/meta.properties ]; then
           echo 'Formatting Kafka storage directory...'
-          /bin/kafka-storage format \
+          runuser -u appuser -- /bin/kafka-storage format \
             --config /etc/kafka/kraft/server.properties \
             --cluster-id $${CLUSTER_ID}
         fi
         
-        # Start Kafka
-        /etc/confluent/docker/run
+        # Start Kafka as appuser
+        echo 'Starting Kafka server...'
+        exec runuser -u appuser -- /etc/confluent/docker/run
       "
 
   postgres:

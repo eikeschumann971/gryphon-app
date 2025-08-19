@@ -3,7 +3,7 @@ mod planning;
 mod mock;
 mod communication;
 
-use worker::AStarPathPlanWorker;
+use worker::run_worker;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -12,8 +12,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize tracing
     tracing_subscriber::fmt::init();
     
-    let mut worker = AStarPathPlanWorker::new().await;
-    worker.run().await?;
+    run_worker().await?;
     
     Ok(())
 }
