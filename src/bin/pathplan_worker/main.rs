@@ -18,8 +18,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     };
 
-    // Initialize tracing
-    tracing_subscriber::fmt::init();
+    // Tracing/global logger initialization is handled by the injected DomainLogger adapters.
 
     run_worker(logger).await?;
 

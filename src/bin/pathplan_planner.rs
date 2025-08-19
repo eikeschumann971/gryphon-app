@@ -25,8 +25,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let logger = gryphon_app::adapters::outbound::init_combined_logger("./domain.log");
     logger.info("Starting Path Planning Planner Service (Event-Driven)");
 
-    // Initialize tracing
-    tracing_subscriber::fmt::init();
+    // Tracing/global logger initialization is handled by the injected DomainLogger adapters.
 
     let mut planner_service = PathPlannerService::new(logger.clone()).await?;
     planner_service.run().await?;

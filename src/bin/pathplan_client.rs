@@ -2,8 +2,7 @@
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    tracing_subscriber::fmt::init();
-
+    // Tracing/global logger initialization is handled by the injected DomainLogger adapters.
     // Compose a domain logger (file with console fallback)
     let logger: gryphon_app::domains::DynLogger =
         match gryphon_app::adapters::outbound::file_logger::init_file_logger("./domain.log") {
