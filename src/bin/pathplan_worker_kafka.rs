@@ -1,0 +1,144 @@
+use gryphon_app::domains::path_planning::*;
+use gryphon_app::adapters::inbound::kafka_event_store::KafkaEventStore;
+use gryphon_app::common::{EventStore, EventEnvelope, EventMetadata};
+use std::time::Duration;
+use tokio::time::sleep;
+use chrono::Utc;
+use std::sync::Arc;
+use rdkafka::consumer::{StreamConsumer, Consumer};
+use rdkafka::{ClientConfig, Message};
+
+#[derive(Debug, Clone)]
+pub struct KafkaPathPlanWorker {
+    pub worker_id: String,
+    pub planner_id: String,
+    pub capabilities: Vec<PlanningAlgorithm>,
+}
+
+impl KafkaPathPlanWorker {
+    pub fn new(worker_id: String, planner_id: String) -> Self {
+        Self {
+            worker_id,
+            planner_id,
+            capabilities: vec![PlanningAlgorithm::AStar],
+        }
+    }
+
+    pub async fn run(&self) -> Result<(), Box<dyn std::error::Error>> {
+        println!("🤖 Starting Kafka Path Planning Worker: {}", self.worker_id);
+        
+        // Initialize Kafka Event Store for publishing events
+        let event_store = Arc::new(
+            KafkaEventStore::new(
+                "localhost:9092", 
+                "path-planning-events", 
+                "worker-group"
+            ).await?
+        );
+        
+        // Create dedicated consumer for receiving PlanAssigned events
+        let consumer: StreamConsumer = ClientConfig::new()
+            .set("group.id", "worker-group")
+            .set("bootstrap.servers", "localhost:9092")
+            .set("enable.partition.eof", "false")
+            .set("session.timeout.ms", "6000")
+            .set("enable.auto.commit", "true")
+            .set("auto.offset.reset", "earliest")
+            .create()
+            .map_err(|e| format!("Failed to create Kafka consumer: {}", e))?;
+        
+        consumer.subscribe(&["path-planning-events"])?;
+        
+        println!("✅ Connected to Kafka event store for distributed event communication");
+        println!("📡 Polling Kafka for PlanAssigned events...");
+        
+        let mut processed_plans = std::collections::HashSet::new();
+        
+        loop {
+            match consumer.recv().await {
+                Ok(message) => {
+                    if let Some(payload) = message.payload() {
+                        let payload_str = String::from_utf8_lossy(payload);
+                        if let Ok(event) = serde_json::from_str::<EventEnvelope>(&payload_str) {
+                            // Only process PlanAssigned events for this worker
+                            if event.event_type == "PlanAssigned" {
+                                if let Ok(event_data) = serde_json::from_value::<PathPlanningEvent>(event.event_data.clone()) {
+                                    if let PathPlanningEvent::PlanAssigned { 
+                                        plan_id, 
+                                        worker_id,
+                                        start_position, 
+                                        destination_position, 
+                                        .. 
+                                    } = event_data {
+                                        // Check if this assignment is for this worker and not already processed
+                                        if worker_id == self.worker_id && !processed_plans.contains(&plan_id) {
+                                            processed_plans.insert(plan_id.clone());
+                                            println!("🔧 Processing plan assignment from Kafka: {}", plan_id);
+                                            
+                                            // Simulate path planning work
+                                            println!("   📊 Calculating optimal path using A* algorithm...");
+                                            sleep(Duration::from_millis(500)).await;
+                                            
+                                            // Generate a simple path (for demo)
+                                            let mut waypoints = Vec::new();
+                                            let steps = 4;
+                                            for i in 0..=steps {
+                                                let t = i as f64 / steps as f64;
+                                                let x = start_position.x + t * (destination_position.x - start_position.x);
+                                                let y = start_position.y + t * (destination_position.y - start_position.y);
+                                                waypoints.push(Position2D { x, y });
+                                            }
+                                            
+                                            println!("   ✅ Path calculated with {} waypoints", waypoints.len());
+                                            
+                                            // Create PlanCompleted event
+                                            let completion_event = PathPlanningEvent::PlanCompleted {
+                                                planner_id: self.planner_id.clone(),
+                                                plan_id: plan_id.clone(),
+                                                worker_id: Some(self.worker_id.clone()),
+                                                waypoints,
+                                                timestamp: Utc::now(),
+                                            };
+                                            
+                                            let metadata = EventMetadata {
+                                                correlation_id: None,
+                                                causation_id: Some(event.event_id),
+                                                user_id: None,
+                                                source: "pathplan_worker_kafka".to_string(),
+                                            };
+                                            
+                                            let completion_envelope = EventEnvelope::new(
+                                                &completion_event, 
+                                                "PathPlan", 
+                                                metadata
+                                            )?;
+                                            
+                                            // Publish completion to Kafka
+                                            event_store.append_events(&plan_id, 1, vec![completion_envelope]).await?;
+                                            println!("   📤 Published PlanCompleted event to Kafka");
+                                            println!("✅ Plan {} completed and published to Kafka successfully", plan_id);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                Err(e) => {
+                    println!("⚠️  Kafka receive error: {}", e);
+                    sleep(Duration::from_secs(1)).await;
+                }
+            }
+        }
+    }
+}
+
+pub async fn run_kafka_worker() -> Result<(), Box<dyn std::error::Error>> {
+    let worker = KafkaPathPlanWorker::new("kafka-worker-1".to_string(), "main-path-planner".to_string());
+    worker.run().await
+}
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    run_kafka_worker().await
+}
