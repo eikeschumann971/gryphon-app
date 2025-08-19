@@ -23,20 +23,73 @@ A sophisticated multi-agent system built with Domain-Driven Design (DDD), Event 
 ## Quick Start
 
 1. **Start Infrastructure**:
+
    ```bash
    docker-compose up -d
+   # Follow Kafka logs (live):
+   docker compose logs -f kafka --tail=200
+   # Check container status:
+   docker ps --filter "name=gryphon-kafka"
+   # top and remove containers + volumes (useful to force 
+   # a fresh Kafka storage format):
+   docker compose down -v
+   ```
+
+   ```bash
+   # will run /tmp/kafka-setup.sh (the file is mounted into the container by docker-compose)
+   docker compose exec kafka bash -lc "/tmp/kafka-setup.sh"
+   # or
+   docker exec -it gryphon-kafka bash -lc "/tmp/kafka-setup.sh"
+   # list topics (host)
+   docker compose exec kafka bash -lc "kafka-topics --bootstrap-server localhost:9092 --list"
+   ```
+
+   ```bash
+   docker exec -i gryphon-postgres psql -U postgres -d gryphon_app -f /docker-entrypoint-initdb.d/init-db.sql
+   ```
+
+   ```bash
+   bash scripts/run_pg_integration_test.sh
    ```
 
 2. **Build and Run**:
+
    ```bash
    cargo build
    cargo run
    ```
 
 3. **Run Tests**:
+
    ```bash
    cargo test
    ```
+
+4. **Run Production**:
+
+   ```bash
+   cargo run --bin pathplan_planner_kafka
+   cargo run --release --bin pathplan_planner_kafka
+
+   cargo run --bin pathplan_worker_kafka
+   cargo run --release --bin pathplan_worker_kafka
+
+   cargo run --bin pathplan_client_kafka
+   cargo run --release --bin pathplan_client_kafka
+   ```
+
+   ```bash
+   pkill -f pathplan
+   ```
+
+## Quick tips & notes
+
+- Your compose uses KRaft (no Zookeeper) and includes a storage format step; on first run it will format storage. If you change the `CLUSTER_ID` or want to reinitialize, run `docker compose down -v` to remove `kafka_data` so the container can re-format.
+- Internal vs external listeners:
+  - Other containers in the same compose can talk to Kafka at `kafka:29092`.
+  - From your host (macOS) use `localhost:9092` (mapped in the compose file).
+- If the Kafka container fails to start, check `docker compose logs kafka` for errors about storage (meta.properties), permissions, or cluster id.
+- The compose mounts `kafka-setup.sh` — ensure that file is executable if you edit it locally.
 
 ## Configuration
 

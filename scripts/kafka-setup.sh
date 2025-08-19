@@ -13,23 +13,28 @@ done
 
 echo "Creating Kafka topics for Gryphon App domains..."
 
-# Define topics with configurations
-declare -A topics=(
-  ["logical-agent-events"]="partitions=3,replication-factor=1"
-  ["technical-agent-events"]="partitions=3,replication-factor=1"
-  ["kinematic-agent-events"]="partitions=3,replication-factor=1"
-  ["path-planning-events"]="partitions=3,replication-factor=1"
-  ["dynamics-events"]="partitions=3,replication-factor=1"
-  ["gui-events"]="partitions=3,replication-factor=1"
+# Define topics and common configuration
+topics=(
+  "logical-agent-events"
+  "technical-agent-events"
+  "kinematic-agent-events"
+  "path-planning-events"
+  "dynamics-events"
+  "gui-events"
 )
 
+# Default partitions and replication factor
+PARTITIONS=3
+REPLICATION_FACTOR=1
+
 # Create each topic
-for topic in "${!topics[@]}"; do
+for topic in "${topics[@]}"; do
   echo "Creating topic: $topic"
   kafka-topics --bootstrap-server localhost:9092 \
     --create \
     --topic "$topic" \
-    --config "${topics[$topic]}" \
+    --partitions "$PARTITIONS" \
+    --replication-factor "$REPLICATION_FACTOR" \
     --if-not-exists
 done
 
