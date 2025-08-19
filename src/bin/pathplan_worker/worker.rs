@@ -38,16 +38,33 @@ impl AStarPathPlanWorker {
                 println!("Found {} plan assignments to process", plan_events.len());
                 
                 for plan_event in plan_events {
+                    println!("🔍 Checking event: {}", plan_event.event_type);
+                    
                     // Extract PlanAssigned data from JSON
                     if let Ok(event_data) = serde_json::from_value::<PathPlanningEvent>(plan_event.event_data.clone()) {
+                        println!("  📋 Successfully parsed event data");
+                        
                         if let PathPlanningEvent::PlanAssigned { 
                             plan_id, 
+                            worker_id,
                             start_position, 
                             destination_position, 
                             .. 
                         } = event_data {
+                            println!("  🎯 PlanAssigned event: plan={}, worker={}, self={}", 
+                                   plan_id, worker_id, self.worker_id);
+                            
+                            // Only process assignments for this specific worker
+                            if worker_id != self.worker_id {
+                                println!("  ⏭️  Skipping assignment for different worker");
+                                continue;
+                            }
+                            
+                            println!("  ✅ Assignment matches this worker!");
+                            
                             // Check if plan is already completed
                             let completion_events = event_store.load_events_by_type("PlanCompleted", None).await?;
+                            println!("  📊 Found {} completion events", completion_events.len());
                             
                             let already_completed = completion_events.iter().any(|completion_event| {
                                 if let Ok(completion_data) = serde_json::from_value::<PathPlanningEvent>(completion_event.event_data.clone()) {
@@ -55,7 +72,11 @@ impl AStarPathPlanWorker {
                                         plan_id: completed_plan_id, 
                                         .. 
                                     } = completion_data {
-                                        completed_plan_id == plan_id
+                                        let is_match = completed_plan_id == plan_id;
+                                        if is_match {
+                                            println!("    ✅ Found completion for plan: {}", completed_plan_id);
+                                        }
+                                        is_match
                                     } else {
                                         false
                                     }
@@ -64,11 +85,27 @@ impl AStarPathPlanWorker {
                                 }
                             });
                             
-                            if !already_completed {
-                                println!("🔧 Processing plan assignment: {}", plan_id);
+                            if already_completed {
+                                println!("  ⏭️  Plan already completed, skipping");
+                            } else {
+                                println!("  🚀 Plan not completed yet, processing...");
+                                println!("🔧 Processing plan assignment for worker {}: {}", self.worker_id, plan_id);
                                 
-                                // Simulate some work - simple path for demo
-                                let waypoints = vec![start_position, destination_position];
+                                // Simulate some path planning work
+                                println!("   📊 Calculating optimal path using A* algorithm...");
+                                sleep(Duration::from_millis(500)).await;
+                                
+                                // Generate a simple path (for demo)
+                                let mut waypoints = Vec::new();
+                                let steps = 5;
+                                for i in 0..=steps {
+                                    let t = i as f64 / steps as f64;
+                                    let x = start_position.x + t * (destination_position.x - start_position.x);
+                                    let y = start_position.y + t * (destination_position.y - start_position.y);
+                                    waypoints.push(Position2D { x, y });
+                                }
+                                
+                                println!("   ✅ Path calculated with {} waypoints", waypoints.len());
                                 
                                 // Create PlanCompleted event
                                 let completion_event = PathPlanningEvent::PlanCompleted {
@@ -83,7 +120,7 @@ impl AStarPathPlanWorker {
                                     correlation_id: None,
                                     causation_id: Some(plan_event.event_id),
                                     user_id: None,
-                                    source: "PathPlanWorker".to_string(),
+                                    source: "pathplan_worker".to_string(),
                                 };
                                 
                                 let completion_envelope = EventEnvelope::new(
@@ -93,9 +130,14 @@ impl AStarPathPlanWorker {
                                 )?;
                                 
                                 event_store.append_events(&plan_id, 1, vec![completion_envelope]).await?;
-                                println!("✅ Plan completed and event published");
+                                println!("   📤 Published PlanCompleted event");
+                                println!("✅ Plan {} completed by worker {}", plan_id, self.worker_id);
                             }
+                        } else {
+                            println!("  🔍 Event is not PlanAssigned");
                         }
+                    } else {
+                        println!("  ❌ Failed to parse event data");
                     }
                 }
             }
