@@ -6,6 +6,8 @@ use std::collections::HashMap;
 use uuid::Uuid;
 use chrono::Utc;
 use std::sync::Arc;
+use rdkafka::consumer::{StreamConsumer, Consumer};
+use rdkafka::{ClientConfig, Message};
 
 #[derive(Debug, Clone)]
 pub struct WorkerInfo {
@@ -47,46 +49,11 @@ impl PathPlanningPlannerService {
         
         let mut planners = HashMap::new();
         
-        // Create or restore planner
+        // Create new planner (skip event restoration for now to avoid hanging)
         let planner_id = "main-path-planner".to_string();
-        match event_store.load_events(&planner_id, 0).await {
-            Ok(events) if !events.is_empty() => {
-                // Restore from events
-                let planner = PathPlanner::new(planner_id.clone(), PlanningAlgorithm::AStar);
-                planners.insert(planner_id.clone(), planner);
-                println!("✅ Restored PathPlanner from {} events", events.len());
-            }
-            _ => {
-                // Create new planner and persist creation event
-                let planner = PathPlanner::new(planner_id.clone(), PlanningAlgorithm::AStar);
-                
-                let creation_event = PathPlanningEvent::PlannerCreated {
-                    planner_id: planner_id.clone(),
-                    algorithm: PlanningAlgorithm::AStar,
-                    timestamp: Utc::now(),
-                };
-                
-                let event_envelope = EventEnvelope {
-                    event_id: Uuid::new_v4(),
-                    aggregate_id: planner_id.clone(),
-                    aggregate_type: "PathPlanner".to_string(),
-                    event_type: creation_event.event_type().to_string(),
-                    event_version: 1,
-                    event_data: serde_json::to_value(&creation_event)?,
-                    metadata: EventMetadata {
-                        correlation_id: Some(Uuid::new_v4()),
-                        causation_id: None,
-                        user_id: None,
-                        source: "pathplan_planner_kafka".to_string(),
-                    },
-                    occurred_at: Utc::now(),
-                };
-                
-                event_store.append_events(&planner_id, 0, vec![event_envelope]).await?;
-                planners.insert(planner_id.clone(), planner);
-                println!("✅ Created new PathPlanner with A* algorithm and persisted creation event to Kafka");
-            }
-        }
+        let planner = PathPlanner::new(planner_id.clone(), PlanningAlgorithm::AStar);
+        planners.insert(planner_id.clone(), planner);
+        println!("✅ Created new PathPlanner with A* algorithm");
         
         Ok(Self {
             planners,
@@ -105,7 +72,7 @@ impl PathPlanningPlannerService {
         println!("📡 Polling Kafka for new events...");
         
         // Set up a polling timer for new events from Kafka
-        let mut event_poll_timer = interval(Duration::from_secs(3));
+        let mut event_poll_timer = interval(Duration::from_millis(500)); // More frequent polling
         let mut heartbeat = interval(Duration::from_secs(30));
         
         loop {
@@ -132,16 +99,40 @@ impl PathPlanningPlannerService {
     }
     
     async fn poll_and_process_kafka_events(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        // Load all PathPlanRequested events from Kafka
-        let path_plan_events = self.event_store.load_events_by_type("PathPlanRequested", None).await?;
+        // Use dedicated consumer for PathPlanRequested events
+        let consumer: rdkafka::consumer::StreamConsumer = rdkafka::ClientConfig::new()
+            .set("group.id", "planner-requests-group")
+            .set("bootstrap.servers", "localhost:9092")
+            .set("enable.partition.eof", "false")
+            .set("session.timeout.ms", "6000")
+            .set("enable.auto.commit", "true")
+            .set("auto.offset.reset", "latest")
+            .create()
+            .map_err(|e| format!("Failed to create planner consumer: {}", e))?;
         
-        if !path_plan_events.is_empty() {
-            println!("📥 Found {} new path planning events from Kafka", path_plan_events.len());
-            
-            for event_envelope in path_plan_events {
-                if let Ok(event_data) = serde_json::from_value::<PathPlanningEvent>(event_envelope.event_data.clone()) {
-                    self.process_event(event_data).await?;
+        consumer.subscribe(&["path-planning-events"])
+            .map_err(|e| format!("Failed to subscribe to events: {}", e))?;
+        
+        // Poll for a short time to get available events
+        let timeout = Duration::from_millis(100);
+        let start_time = std::time::Instant::now();
+        
+        while start_time.elapsed() < timeout {
+            match tokio::time::timeout(Duration::from_millis(50), consumer.recv()).await {
+                Ok(Ok(message)) => {
+                    if let Some(payload) = message.payload() {
+                        let payload_str = String::from_utf8_lossy(payload);
+                        if let Ok(event_envelope) = serde_json::from_str::<EventEnvelope>(&payload_str) {
+                            if event_envelope.event_type == "PathPlanRequested" {
+                                println!("📥 Found PathPlanRequested event from Kafka: {}", event_envelope.aggregate_id);
+                                if let Ok(event_data) = serde_json::from_value::<PathPlanningEvent>(event_envelope.event_data.clone()) {
+                                    self.process_event(event_data).await?;
+                                }
+                            }
+                        }
+                    }
                 }
+                _ => break,
             }
         }
         

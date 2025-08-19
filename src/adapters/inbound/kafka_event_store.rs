@@ -124,13 +124,13 @@ impl EventStore for KafkaEventStore {
             .map_err(|e| format!("Failed to subscribe to topic: {}", e))?;
 
         let mut events = Vec::new();
-        let timeout = Duration::from_secs(2);
+        let timeout = Duration::from_millis(500); // Reduced timeout for better responsiveness
         
         // Read all available messages
         let start_time = std::time::Instant::now();
         while start_time.elapsed() < timeout {
-            match self.consumer.recv().await {
-                Ok(message) => {
+            match tokio::time::timeout(Duration::from_millis(100), self.consumer.recv()).await {
+                Ok(Ok(message)) => {
                     if let Some(payload) = message.payload() {
                         let payload_str = String::from_utf8_lossy(payload);
                         match serde_json::from_str::<EventEnvelope>(&payload_str) {
@@ -139,11 +139,11 @@ impl EventStore for KafkaEventStore {
                                     events.push(event);
                                 }
                             }
-                            Err(e) => tracing::warn!("Failed to deserialize event: {}", e),
+                            Err(e) => println!("⚠️  Failed to deserialize event: {}", e),
                         }
                     }
                 }
-                Err(_) => break, // No more messages or timeout
+                _ => break, // Timeout or error - no more messages available
             }
         }
 

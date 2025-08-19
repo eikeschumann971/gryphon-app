@@ -2,7 +2,6 @@ use gryphon_app::domains::path_planning::*;
 use gryphon_app::adapters::inbound::kafka_event_store::KafkaEventStore;
 use gryphon_app::common::{EventStore, EventEnvelope, EventMetadata};
 use std::time::Duration;
-use tokio::time::sleep;
 use chrono::Utc;
 use std::sync::Arc;
 use rdkafka::consumer::{StreamConsumer, Consumer};
@@ -32,18 +31,18 @@ impl KafkaPathPlanWorker {
             KafkaEventStore::new(
                 "localhost:9092", 
                 "path-planning-events", 
-                "worker-group"
+                &format!("worker-group-{}", self.worker_id)
             ).await?
         );
         
-        // Create dedicated consumer for receiving PlanAssigned events
+        // Create dedicated consumer for receiving PlanAssigned events with unique group ID
         let consumer: StreamConsumer = ClientConfig::new()
-            .set("group.id", "worker-group")
+            .set("group.id", &format!("worker-group-{}", self.worker_id))
             .set("bootstrap.servers", "localhost:9092")
             .set("enable.partition.eof", "false")
             .set("session.timeout.ms", "6000")
             .set("enable.auto.commit", "true")
-            .set("auto.offset.reset", "earliest")
+            .set("auto.offset.reset", "latest") // Only consume new messages
             .create()
             .map_err(|e| format!("Failed to create Kafka consumer: {}", e))?;
         
@@ -55,11 +54,13 @@ impl KafkaPathPlanWorker {
         let mut processed_plans = std::collections::HashSet::new();
         
         loop {
-            match consumer.recv().await {
-                Ok(message) => {
+            match tokio::time::timeout(Duration::from_millis(1000), consumer.recv()).await {
+                Ok(Ok(message)) => {
                     if let Some(payload) = message.payload() {
                         let payload_str = String::from_utf8_lossy(payload);
                         if let Ok(event) = serde_json::from_str::<EventEnvelope>(&payload_str) {
+                            println!("📥 Received Kafka event: {} for aggregate {}", event.event_type, event.aggregate_id);
+                            
                             // Only process PlanAssigned events for this worker
                             if event.event_type == "PlanAssigned" {
                                 if let Ok(event_data) = serde_json::from_value::<PathPlanningEvent>(event.event_data.clone()) {
@@ -77,7 +78,7 @@ impl KafkaPathPlanWorker {
                                             
                                             // Simulate path planning work
                                             println!("   📊 Calculating optimal path using A* algorithm...");
-                                            sleep(Duration::from_millis(500)).await;
+                                            tokio::time::sleep(Duration::from_millis(500)).await;
                                             
                                             // Generate a simple path (for demo)
                                             let mut waypoints = Vec::new();
@@ -117,6 +118,8 @@ impl KafkaPathPlanWorker {
                                             event_store.append_events(&plan_id, 1, vec![completion_envelope]).await?;
                                             println!("   📤 Published PlanCompleted event to Kafka");
                                             println!("✅ Plan {} completed and published to Kafka successfully", plan_id);
+                                        } else if worker_id != self.worker_id {
+                                            println!("🔄 Ignoring assignment for different worker: {} (this worker: {})", worker_id, self.worker_id);
                                         }
                                     }
                                 }
@@ -124,9 +127,13 @@ impl KafkaPathPlanWorker {
                         }
                     }
                 }
-                Err(e) => {
+                Ok(Err(e)) => {
                     println!("⚠️  Kafka receive error: {}", e);
-                    sleep(Duration::from_secs(1)).await;
+                    tokio::time::sleep(Duration::from_secs(1)).await;
+                }
+                Err(_) => {
+                    // Timeout - continue polling
+                    continue;
                 }
             }
         }
