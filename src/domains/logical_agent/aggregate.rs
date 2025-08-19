@@ -1,7 +1,7 @@
-use crate::common::{AggregateRoot, DomainResult, DomainError};
+use super::events::LogicalAgentEvent;
+use crate::common::{AggregateRoot, DomainError, DomainResult};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-use super::events::LogicalAgentEvent;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LogicalAgent {
@@ -104,12 +104,17 @@ impl LogicalAgent {
             name,
             timestamp: chrono::Utc::now(),
         };
-        
+
         agent.add_event(event);
         agent
     }
 
-    pub fn add_objective(&mut self, description: String, priority: u8, constraints: Vec<String>) -> DomainResult<Uuid> {
+    pub fn add_objective(
+        &mut self,
+        description: String,
+        priority: u8,
+        constraints: Vec<String>,
+    ) -> DomainResult<Uuid> {
         if priority > 10 {
             return Err(DomainError::InvalidCommand {
                 reason: "Priority must be between 0 and 10".to_string(),
@@ -153,7 +158,12 @@ impl LogicalAgent {
         Ok(())
     }
 
-    pub fn add_fact(&mut self, statement: String, confidence: f64, source: String) -> DomainResult<Uuid> {
+    pub fn add_fact(
+        &mut self,
+        statement: String,
+        confidence: f64,
+        source: String,
+    ) -> DomainResult<Uuid> {
         if !(0.0..=1.0).contains(&confidence) {
             return Err(DomainError::InvalidCommand {
                 reason: "Confidence must be between 0.0 and 1.0".to_string(),
@@ -203,7 +213,13 @@ impl AggregateRoot for LogicalAgent {
                 self.name = name.clone();
                 self.status = AgentStatus::Idle;
             }
-            LogicalAgentEvent::ObjectiveAdded { objective_id, description, priority, constraints, .. } => {
+            LogicalAgentEvent::ObjectiveAdded {
+                objective_id,
+                description,
+                priority,
+                constraints,
+                ..
+            } => {
                 let objective = Objective {
                     id: *objective_id,
                     description: description.clone(),
@@ -216,7 +232,13 @@ impl AggregateRoot for LogicalAgent {
             LogicalAgentEvent::StatusChanged { new_status, .. } => {
                 self.status = new_status.clone();
             }
-            LogicalAgentEvent::FactAdded { fact_id, statement, confidence, source, .. } => {
+            LogicalAgentEvent::FactAdded {
+                fact_id,
+                statement,
+                confidence,
+                source,
+                ..
+            } => {
                 let fact = Fact {
                     id: *fact_id,
                     statement: statement.clone(),

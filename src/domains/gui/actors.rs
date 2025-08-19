@@ -1,6 +1,6 @@
 // GUI actors - simplified implementation
-use tokio::sync::mpsc;
 use super::events::GUIEvent;
+use tokio::sync::mpsc;
 
 pub struct GUICommandActor {
     event_sender: mpsc::Sender<GUIEvent>,

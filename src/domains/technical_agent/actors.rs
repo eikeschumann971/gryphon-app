@@ -1,10 +1,10 @@
-use crate::common::{EventStore, EventEnvelope, EventMetadata, DomainEvent};
+use super::aggregate::AgentType;
 use super::events::TechnicalAgentEvent;
 use super::projections::TechnicalAgentOverview;
-use super::aggregate::AgentType;
-use tokio::sync::{mpsc, RwLock};
+use crate::common::{DomainEvent, EventEnvelope, EventMetadata, EventStore};
 use std::collections::HashMap;
 use std::sync::Arc;
+use tokio::sync::{mpsc, RwLock};
 use uuid::Uuid;
 
 pub struct TechnicalAgentEventActor {
@@ -76,7 +76,6 @@ impl TechnicalAgentProjectionStore {
             agent_overviews: HashMap::new(),
         }
     }
-
 }
 
 impl Default for TechnicalAgentProjectionStore {
@@ -87,12 +86,19 @@ impl Default for TechnicalAgentProjectionStore {
 
 impl TechnicalAgentProjectionStore {
     pub fn apply_event(&mut self, event: &TechnicalAgentEvent) {
-        if let TechnicalAgentEvent::AgentCreated { agent_id, name, agent_type, timestamp, .. } = event {
+        if let TechnicalAgentEvent::AgentCreated {
+            agent_id,
+            name,
+            agent_type,
+            timestamp,
+            ..
+        } = event
+        {
             let overview = TechnicalAgentOverview::new(
-                agent_id.clone(), 
-                name.clone(), 
-                agent_type.clone(), 
-                *timestamp
+                agent_id.clone(),
+                name.clone(),
+                agent_type.clone(),
+                *timestamp,
             );
             self.agent_overviews.insert(agent_id.clone(), overview);
         }
@@ -112,7 +118,12 @@ impl TechnicalAgentCommandActor {
         Self { event_sender }
     }
 
-    pub async fn create_agent(&self, agent_id: String, name: String, agent_type: AgentType) -> Result<(), String> {
+    pub async fn create_agent(
+        &self,
+        agent_id: String,
+        name: String,
+        agent_type: AgentType,
+    ) -> Result<(), String> {
         let event = TechnicalAgentEvent::AgentCreated {
             agent_id,
             name,

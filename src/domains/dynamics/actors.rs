@@ -1,7 +1,7 @@
 // Dynamics actors - simplified implementation
-use tokio::sync::mpsc;
-use super::events::DynamicsEvent;
 use super::aggregate::PhysicsModel;
+use super::events::DynamicsEvent;
+use tokio::sync::mpsc;
 
 pub struct DynamicsCommandActor {
     event_sender: mpsc::Sender<DynamicsEvent>,
@@ -12,7 +12,11 @@ impl DynamicsCommandActor {
         Self { event_sender }
     }
 
-    pub async fn create_simulator(&self, simulator_id: String, physics_model: PhysicsModel) -> Result<(), String> {
+    pub async fn create_simulator(
+        &self,
+        simulator_id: String,
+        physics_model: PhysicsModel,
+    ) -> Result<(), String> {
         let event = DynamicsEvent::SimulatorCreated {
             simulator_id,
             physics_model,

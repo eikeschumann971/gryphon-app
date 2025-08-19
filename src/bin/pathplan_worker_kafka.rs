@@ -1,43 +1,50 @@
-use gryphon_app::domains::path_planning::*;
-use gryphon_app::adapters::inbound::kafka_event_store::KafkaEventStore;
-use gryphon_app::common::{EventStore, EventEnvelope, EventMetadata};
-use std::time::Duration;
 use chrono::Utc;
-use std::sync::Arc;
-use rdkafka::consumer::{StreamConsumer, Consumer};
+use gryphon_app::adapters::inbound::kafka_event_store::KafkaEventStore;
+use gryphon_app::common::{EventEnvelope, EventMetadata, EventStore};
+use gryphon_app::domains::path_planning::*;
+use gryphon_app::domains::DynLogger;
+use rdkafka::consumer::{Consumer, StreamConsumer};
 use rdkafka::{ClientConfig, Message};
+use std::sync::Arc;
+use std::time::Duration;
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct KafkaPathPlanWorker {
     pub worker_id: String,
     pub planner_id: String,
     pub capabilities: Vec<PlanningAlgorithm>,
+    pub logger: DynLogger,
 }
 
 impl KafkaPathPlanWorker {
-    pub fn new(worker_id: String, planner_id: String) -> Self {
+    pub fn new(worker_id: String, planner_id: String, logger: DynLogger) -> Self {
         Self {
             worker_id,
             planner_id,
             capabilities: vec![PlanningAlgorithm::AStar],
+            logger,
         }
     }
 
     pub async fn run(&self) -> Result<(), Box<dyn std::error::Error>> {
-        println!("🤖 Starting Kafka Path Planning Worker: {}", self.worker_id);
-        
+        self.logger.info(&format!(
+            "Starting Kafka Path Planning Worker: {}",
+            self.worker_id
+        ));
+
         // Initialize Kafka Event Store for publishing events
         let event_store = Arc::new(
             KafkaEventStore::new(
-                "localhost:9092", 
-                "path-planning-events", 
-                &format!("worker-group-{}", self.worker_id)
-            ).await?
+                "localhost:9092",
+                "path-planning-events",
+                &format!("worker-group-{}", self.worker_id),
+            )
+            .await?,
         );
-        
+
         // Register this worker with the planner via Kafka event
         self.register_worker(&event_store).await?;
-        
+
         // Create dedicated consumer for receiving PlanAssigned events with unique group ID
         let consumer: StreamConsumer = ClientConfig::new()
             .set("group.id", format!("worker-group-{}", self.worker_id))
@@ -48,17 +55,18 @@ impl KafkaPathPlanWorker {
             .set("auto.offset.reset", "latest") // Only consume new messages
             .create()
             .map_err(|e| format!("Failed to create Kafka consumer: {}", e))?;
-        
+
         consumer.subscribe(&["path-planning-events"])?;
-        
-        println!("✅ Connected to Kafka event store for distributed event communication");
-        println!("📡 Polling Kafka for PlanAssigned events...");
-        
+
+        self.logger
+            .info("Connected to Kafka event store for distributed event communication");
+        self.logger.info("Polling Kafka for PlanAssigned events");
+
         let mut processed_plans = std::collections::HashSet::new();
-        
+
         // Set up heartbeat timer - send heartbeat every 30 seconds
         let mut heartbeat_timer = tokio::time::interval(Duration::from_secs(30));
-        
+
         loop {
             tokio::select! {
                 // Handle Kafka message polling
@@ -68,26 +76,26 @@ impl KafkaPathPlanWorker {
                             if let Some(payload) = message.payload() {
                                 let payload_str = String::from_utf8_lossy(payload);
                                 if let Ok(event) = serde_json::from_str::<EventEnvelope>(&payload_str) {
-                                    println!("📥 Received Kafka event: {} for aggregate {}", event.event_type, event.aggregate_id);
-                                    
+                                    self.logger.info(&format!("Received Kafka event: {} for aggregate {}", event.event_type, event.aggregate_id));
+
                                     // Only process PlanAssigned events for this worker
                                     if event.event_type == "PlanAssigned" {
-                                        if let Ok(PathPlanningEvent::PlanAssigned { 
-                                            plan_id, 
+                                        if let Ok(PathPlanningEvent::PlanAssigned {
+                                            plan_id,
                                             worker_id,
-                                            start_position, 
-                                            destination_position, 
-                                            .. 
+                                            start_position,
+                                            destination_position,
+                                            ..
                                         }) = serde_json::from_value::<PathPlanningEvent>(event.event_data.clone()) {
                                             // Check if this assignment is for this worker and not already processed
                                             if worker_id == self.worker_id && !processed_plans.contains(&plan_id) {
                                                 processed_plans.insert(plan_id.clone());
-                                                println!("🔧 Processing plan assignment from Kafka: {}", plan_id);
-                                                
+                                                self.logger.info(&format!("Processing plan assignment from Kafka: {}", plan_id));
+
                                                 // Simulate path planning work
-                                                println!("   📊 Calculating optimal path using A* algorithm...");
+                                                self.logger.info("Calculating optimal path using A* algorithm");
                                                 tokio::time::sleep(Duration::from_millis(500)).await;
-                                                
+
                                                 // Generate a simple path (for demo)
                                                 let mut waypoints = Vec::new();
                                                 let steps = 4;
@@ -97,9 +105,9 @@ impl KafkaPathPlanWorker {
                                                     let y = start_position.y + t * (destination_position.y - start_position.y);
                                                     waypoints.push(Position2D { x, y });
                                                 }
-                                                
-                                                println!("   ✅ Path calculated with {} waypoints", waypoints.len());
-                                                
+
+                                                self.logger.info(&format!("Path calculated with {} waypoints", waypoints.len()));
+
                                                 // Create PlanCompleted event
                                                 let completion_event = PathPlanningEvent::PlanCompleted {
                                                     planner_id: self.planner_id.clone(),
@@ -108,34 +116,34 @@ impl KafkaPathPlanWorker {
                                                     waypoints,
                                                     timestamp: Utc::now(),
                                                 };
-                                                
+
                                                 let metadata = EventMetadata {
                                                     correlation_id: None,
                                                     causation_id: Some(event.event_id),
                                                     user_id: None,
                                                     source: "pathplan_worker_kafka".to_string(),
                                                 };
-                                                
+
                                                 let completion_envelope = EventEnvelope::new(
-                                                    &completion_event, 
-                                                    "PathPlan", 
+                                                    &completion_event,
+                                                    "PathPlan",
                                                     metadata
                                                 )?;
-                                                
+
                                                 // Publish completion to Kafka
                                                 event_store.append_events(&plan_id, 1, vec![completion_envelope]).await?;
-                                                println!("   📤 Published PlanCompleted event to Kafka");
-                                                println!("✅ Plan {} completed and published to Kafka successfully", plan_id);
+                                                self.logger.info("Published PlanCompleted event to Kafka");
+                                                self.logger.info(&format!("Plan {} completed and published to Kafka successfully", plan_id));
                                             } else if worker_id != self.worker_id {
-                                                println!("🔄 Ignoring assignment for different worker: {} (this worker: {})", worker_id, self.worker_id);
+                                                self.logger.info(&format!("Ignoring assignment for different worker: {} (this worker: {})", worker_id, self.worker_id));
                                             }
                                         }
                                     }
                                 }
                             }
                         }
-                        Ok(Err(e)) => {
-                            println!("⚠️  Kafka receive error: {}", e);
+                            Ok(Err(e)) => {
+                            self.logger.warn(&format!("Kafka receive error: {}", e));
                             tokio::time::sleep(Duration::from_secs(1)).await;
                         }
                         Err(_) => {
@@ -143,45 +151,52 @@ impl KafkaPathPlanWorker {
                         }
                     }
                 }
-                
+
                 // Handle periodic heartbeat
-                _ = heartbeat_timer.tick() => {
+                    _ = heartbeat_timer.tick() => {
                     if let Err(e) = self.send_heartbeat(&event_store).await {
-                        println!("⚠️  Failed to send heartbeat: {}", e);
+                        self.logger.warn(&format!("Failed to send heartbeat: {}", e));
                     }
                 }
-                
+
                 // Handle shutdown signal
                 _ = tokio::signal::ctrl_c() => {
-                    println!("🛑 Shutting down worker {}, sending unregistration event", self.worker_id);
+                    self.logger.info(&format!("Shutting down worker {}, sending unregistration event", self.worker_id));
                     if let Err(e) = self.send_unregistration(&event_store).await {
                         println!("⚠️  Failed to send unregistration event: {}", e);
+                        self.logger.warn(&format!("Failed to send unregistration event: {}", e));
                     }
                     break;
                 }
             }
         }
-        
+
         Ok(())
     }
-    
-    async fn register_worker(&self, event_store: &Arc<KafkaEventStore>) -> Result<(), Box<dyn std::error::Error>> {
-        println!("📝 Registering worker {} with planner via Kafka", self.worker_id);
-        
+
+    async fn register_worker(
+        &self,
+        event_store: &Arc<KafkaEventStore>,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        self.logger.info(&format!(
+            "Registering worker {} with planner via Kafka",
+            self.worker_id
+        ));
+
         let registration_event = PathPlanningEvent::WorkerRegistered {
             planner_id: self.planner_id.clone(),
             worker_id: self.worker_id.clone(),
             capabilities: self.capabilities.clone(),
             timestamp: Utc::now(),
         };
-        
+
         let metadata = EventMetadata {
             correlation_id: None,
             causation_id: None,
             user_id: None,
             source: format!("worker-{}", self.worker_id),
         };
-        
+
         let event_envelope = EventEnvelope {
             event_id: uuid::Uuid::new_v4(),
             aggregate_id: self.planner_id.clone(),
@@ -192,16 +207,18 @@ impl KafkaPathPlanWorker {
             metadata: metadata.clone(),
             occurred_at: Utc::now(),
         };
-        
-        event_store.append_events(&self.planner_id, 0, vec![event_envelope]).await?;
-        
+
+        event_store
+            .append_events(&self.planner_id, 0, vec![event_envelope])
+            .await?;
+
         // Also send ready status
         let ready_event = PathPlanningEvent::WorkerReady {
             planner_id: self.planner_id.clone(),
             worker_id: self.worker_id.clone(),
             timestamp: Utc::now(),
         };
-        
+
         let ready_envelope = EventEnvelope {
             event_id: uuid::Uuid::new_v4(),
             aggregate_id: self.planner_id.clone(),
@@ -212,27 +229,35 @@ impl KafkaPathPlanWorker {
             metadata,
             occurred_at: Utc::now(),
         };
-        
-        event_store.append_events(&self.planner_id, 0, vec![ready_envelope]).await?;
-        
-        println!("✅ Worker {} registered and marked as ready", self.worker_id);
+
+        event_store
+            .append_events(&self.planner_id, 0, vec![ready_envelope])
+            .await?;
+
+        self.logger.info(&format!(
+            "Worker {} registered and marked as ready",
+            self.worker_id
+        ));
         Ok(())
     }
-    
-    async fn send_heartbeat(&self, event_store: &Arc<KafkaEventStore>) -> Result<(), Box<dyn std::error::Error>> {
+
+    async fn send_heartbeat(
+        &self,
+        event_store: &Arc<KafkaEventStore>,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let heartbeat_event = PathPlanningEvent::WorkerHeartbeat {
             planner_id: self.planner_id.clone(),
             worker_id: self.worker_id.clone(),
             timestamp: Utc::now(),
         };
-        
+
         let metadata = EventMetadata {
             correlation_id: None,
             causation_id: None,
             user_id: None,
             source: format!("worker-{}", self.worker_id),
         };
-        
+
         let heartbeat_envelope = EventEnvelope {
             event_id: uuid::Uuid::new_v4(),
             aggregate_id: self.planner_id.clone(),
@@ -243,27 +268,33 @@ impl KafkaPathPlanWorker {
             metadata,
             occurred_at: Utc::now(),
         };
-        
-        event_store.append_events(&self.planner_id, 0, vec![heartbeat_envelope]).await?;
-        println!("💓 Sent heartbeat for worker {}", self.worker_id);
+
+        event_store
+            .append_events(&self.planner_id, 0, vec![heartbeat_envelope])
+            .await?;
+        self.logger
+            .info(&format!("Sent heartbeat for worker {}", self.worker_id));
         Ok(())
     }
-    
-    async fn send_unregistration(&self, event_store: &Arc<KafkaEventStore>) -> Result<(), Box<dyn std::error::Error>> {
+
+    async fn send_unregistration(
+        &self,
+        event_store: &Arc<KafkaEventStore>,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let offline_event = PathPlanningEvent::WorkerOffline {
             planner_id: self.planner_id.clone(),
             worker_id: self.worker_id.clone(),
             reason: "Graceful shutdown".to_string(),
             timestamp: Utc::now(),
         };
-        
+
         let metadata = EventMetadata {
             correlation_id: None,
             causation_id: None,
             user_id: None,
             source: format!("worker-{}", self.worker_id),
         };
-        
+
         let offline_envelope = EventEnvelope {
             event_id: uuid::Uuid::new_v4(),
             aggregate_id: self.planner_id.clone(),
@@ -274,22 +305,30 @@ impl KafkaPathPlanWorker {
             metadata,
             occurred_at: Utc::now(),
         };
-        
-        event_store.append_events(&self.planner_id, 0, vec![offline_envelope]).await?;
-        println!("📤 Sent unregistration event for worker {}", self.worker_id);
+
+        event_store
+            .append_events(&self.planner_id, 0, vec![offline_envelope])
+            .await?;
+        self.logger.info(&format!(
+            "Sent unregistration event for worker {}",
+            self.worker_id
+        ));
         Ok(())
     }
 }
 
-pub async fn run_kafka_worker() -> Result<(), Box<dyn std::error::Error>> {
+pub async fn run_kafka_worker(logger: DynLogger) -> Result<(), Box<dyn std::error::Error>> {
     // Generate unique worker ID to avoid conflicts
     let unique_id = uuid::Uuid::new_v4().to_string()[..8].to_string();
     let worker_id = format!("kafka-worker-{}", unique_id);
-    let worker = KafkaPathPlanWorker::new(worker_id, "main-path-planner".to_string());
+    let worker = KafkaPathPlanWorker::new(worker_id, "main-path-planner".to_string(), logger);
     worker.run().await
 }
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    run_kafka_worker().await
+    // Initialize combined logger (file + console fallback)
+    let logger = gryphon_app::adapters::outbound::init_combined_logger("./domain.log");
+    logger.info("Starting Kafka Path Planning Worker");
+    run_kafka_worker(logger.clone()).await
 }

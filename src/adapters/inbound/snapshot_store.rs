@@ -1,4 +1,4 @@
-use crate::common::{SnapshotStore, Snapshot};
+use crate::common::{Snapshot, SnapshotStore};
 use async_trait::async_trait;
 use std::collections::HashMap;
 use tokio::sync::RwLock;
@@ -21,16 +21,16 @@ impl InMemorySnapshotStore {
 impl SnapshotStore for InMemorySnapshotStore {
     async fn save_snapshot(&self, snapshot: Snapshot) -> Result<(), String> {
         let mut store = self.snapshots.write().await;
-        
+
         let aggregate_snapshots = store
             .entry(snapshot.aggregate_id.clone())
             .or_insert_with(Vec::new);
-        
+
         aggregate_snapshots.push(snapshot);
-        
+
         // Sort by version (latest first)
         aggregate_snapshots.sort_by(|a, b| b.aggregate_version.cmp(&a.aggregate_version));
-        
+
         Ok(())
     }
 
@@ -40,7 +40,7 @@ impl SnapshotStore for InMemorySnapshotStore {
         max_version: Option<u64>,
     ) -> Result<Option<Snapshot>, String> {
         let store = self.snapshots.read().await;
-        
+
         if let Some(snapshots) = store.get(aggregate_id) {
             for snapshot in snapshots {
                 if let Some(max_ver) = max_version {
@@ -52,7 +52,7 @@ impl SnapshotStore for InMemorySnapshotStore {
                 }
             }
         }
-        
+
         Ok(None)
     }
 
@@ -62,11 +62,11 @@ impl SnapshotStore for InMemorySnapshotStore {
         version: u64,
     ) -> Result<(), String> {
         let mut store = self.snapshots.write().await;
-        
+
         if let Some(snapshots) = store.get_mut(aggregate_id) {
             snapshots.retain(|snapshot| snapshot.aggregate_version >= version);
         }
-        
+
         Ok(())
     }
 }

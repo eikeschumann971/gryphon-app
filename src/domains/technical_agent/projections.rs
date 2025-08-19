@@ -1,7 +1,7 @@
-use serde::{Deserialize, Serialize};
-use chrono::{DateTime, Utc};
-use super::events::TechnicalAgentEvent;
 use super::aggregate::{AgentType, TechnicalStatus};
+use super::events::TechnicalAgentEvent;
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TechnicalAgentOverview {
@@ -17,7 +17,12 @@ pub struct TechnicalAgentOverview {
 }
 
 impl TechnicalAgentOverview {
-    pub fn new(agent_id: String, name: String, agent_type: AgentType, created_at: DateTime<Utc>) -> Self {
+    pub fn new(
+        agent_id: String,
+        name: String,
+        agent_type: AgentType,
+        created_at: DateTime<Utc>,
+    ) -> Self {
         Self {
             agent_id,
             name,
@@ -33,7 +38,12 @@ impl TechnicalAgentOverview {
 
     pub fn apply_event(&mut self, event: &TechnicalAgentEvent) {
         match event {
-            TechnicalAgentEvent::AgentCreated { name, agent_type, timestamp, .. } => {
+            TechnicalAgentEvent::AgentCreated {
+                name,
+                agent_type,
+                timestamp,
+                ..
+            } => {
                 self.name = name.clone();
                 self.agent_type = agent_type.clone();
                 self.created_at = *timestamp;
@@ -43,7 +53,11 @@ impl TechnicalAgentOverview {
                 self.capabilities_count += 1;
                 self.last_activity = *timestamp;
             }
-            TechnicalAgentEvent::StatusChanged { new_status, timestamp, .. } => {
+            TechnicalAgentEvent::StatusChanged {
+                new_status,
+                timestamp,
+                ..
+            } => {
                 self.status = new_status.clone();
                 self.last_activity = *timestamp;
             }

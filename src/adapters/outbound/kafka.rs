@@ -1,10 +1,10 @@
-use crate::common::{EventStore, EventEnvelope};
+use crate::common::{EventEnvelope, EventStore};
 use crate::config::KafkaConfig;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use rdkafka::config::ClientConfig;
-use rdkafka::producer::{FutureProducer, FutureRecord};
 use rdkafka::consumer::StreamConsumer;
+use rdkafka::producer::{FutureProducer, FutureRecord};
 use serde_json;
 use std::time::Duration;
 
@@ -64,13 +64,11 @@ impl EventStore for KafkaEventStore {
         for event in events {
             let topic = self.get_topic_for_aggregate(&event.aggregate_type);
             let key = format!("{}:{}", event.aggregate_type, aggregate_id);
-            
+
             let payload = serde_json::to_string(&event)
                 .map_err(|e| format!("Failed to serialize event: {}", e))?;
 
-            let record = FutureRecord::to(topic)
-                .key(&key)
-                .payload(&payload);
+            let record = FutureRecord::to(topic).key(&key).payload(&payload);
 
             self.producer
                 .send(record, Duration::from_secs(5))
@@ -90,11 +88,11 @@ impl EventStore for KafkaEventStore {
         // In a real-world scenario, you'd need to implement proper event replay
         // from Kafka, potentially using a separate topic for event storage
         // or implementing compaction strategies
-        
+
         // For now, return empty as Kafka is primarily used for event publishing
         // Consider using a separate event store (like EventStore DB) for event sourcing
         // and Kafka for event broadcasting
-        
+
         Ok(Vec::new())
     }
 
@@ -105,7 +103,7 @@ impl EventStore for KafkaEventStore {
     ) -> Result<Vec<EventEnvelope>, String> {
         // Similar to load_events, this would require implementing
         // proper event querying capabilities
-        
+
         Ok(Vec::new())
     }
 }
@@ -114,7 +112,7 @@ impl EventStore for KafkaEventStore {
 pub async fn create_kafka_topics(config: &KafkaConfig) -> Result<(), String> {
     // Note: In a real implementation, you would use Kafka Admin API
     // to create topics programmatically
-    
+
     let topics = vec![
         &config.topics.logical_agent_events,
         &config.topics.technical_agent_events,
@@ -126,6 +124,6 @@ pub async fn create_kafka_topics(config: &KafkaConfig) -> Result<(), String> {
 
     tracing::info!("Required Kafka topics: {:?}", topics);
     tracing::warn!("Auto-creation of Kafka topics not implemented. Please ensure topics exist.");
-    
+
     Ok(())
 }

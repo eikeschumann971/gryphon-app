@@ -1,8 +1,8 @@
-use gryphon_app::adapters::outbound::path_planning_data::{FilesystemDataSource, Coord};
+use gryphon_app::adapters::outbound::path_planning_data::{Coord, FilesystemDataSource};
 use gryphon_app::PathPlanningDataSource;
-use tempfile::tempdir;
 use std::fs;
 use std::io::Write;
+use tempfile::tempdir;
 
 #[test]
 fn test_build_graph_from_point_feature() {
@@ -25,8 +25,8 @@ fn test_build_graph_from_point_feature() {
 }"#).unwrap();
 
     let geo = ds.load_geojson("points.geojson").unwrap();
-  let graph = ds.build_graph_struct(&geo).unwrap();
-  assert!(graph.node_count() > 0);
+    let graph = ds.build_graph_struct(&geo).unwrap();
+    assert!(graph.node_count() > 0);
 }
 
 #[test]
@@ -49,8 +49,8 @@ fn test_build_graph_from_linestring() {
 }"#).unwrap();
 
     let geo = ds.load_geojson("lines.geojson").unwrap();
-  let graph = ds.build_graph_struct(&geo).unwrap();
-  assert!(graph.node_count() > 0);
+    let graph = ds.build_graph_struct(&geo).unwrap();
+    assert!(graph.node_count() > 0);
 }
 
 #[test]
@@ -92,27 +92,30 @@ fn test_save_and_load_graph_roundtrip() {
 
 #[test]
 fn test_load_legacy_v0_graph_file_migrates() {
-  let dir = tempdir().unwrap();
-  let base = dir.path().to_path_buf();
-  let ds = FilesystemDataSource::new(Some(base.clone()));
+    let dir = tempdir().unwrap();
+    let base = dir.path().to_path_buf();
+    let ds = FilesystemDataSource::new(Some(base.clone()));
 
-  // create a small graph payload and write a v0 file manually
-  use petgraph::graph::Graph;
-  use petgraph::Undirected;
-  let mut graph: Graph<Coord, (), Undirected> = Graph::new_undirected();
-  let _n1 = graph.add_node(Coord(0.0,0.0));
-  let _n2 = graph.add_node(Coord(1.0,0.0));
-  let payload = bincode::serialize(&graph).unwrap();
+    // create a small graph payload and write a v0 file manually
+    use petgraph::graph::Graph;
+    use petgraph::Undirected;
+    let mut graph: Graph<Coord, (), Undirected> = Graph::new_undirected();
+    let _n1 = graph.add_node(Coord(0.0, 0.0));
+    let _n2 = graph.add_node(Coord(1.0, 0.0));
+    let payload = bincode::serialize(&graph).unwrap();
 
-  // write file: magic + version(0) + header_len(0) + payload
-  let mut p = base.clone(); p.push("graphs"); fs::create_dir_all(&p).unwrap(); p.push("legacy_v0.graph");
-  let mut f = fs::File::create(&p).unwrap();
-  f.write_all(b"PGPH").unwrap();
-  f.write_all(&[0u8]).unwrap();
-  f.write_all(&0u32.to_le_bytes()).unwrap();
-  f.write_all(&payload).unwrap();
-  drop(f);
+    // write file: magic + version(0) + header_len(0) + payload
+    let mut p = base.clone();
+    p.push("graphs");
+    fs::create_dir_all(&p).unwrap();
+    p.push("legacy_v0.graph");
+    let mut f = fs::File::create(&p).unwrap();
+    f.write_all(b"PGPH").unwrap();
+    f.write_all(&[0u8]).unwrap();
+    f.write_all(&0u32.to_le_bytes()).unwrap();
+    f.write_all(&payload).unwrap();
+    drop(f);
 
-  let loaded = ds.load_graph("legacy_v0.graph").unwrap();
-  assert_eq!(loaded.node_count(), 2);
+    let loaded = ds.load_graph("legacy_v0.graph").unwrap();
+    assert_eq!(loaded.node_count(), 2);
 }

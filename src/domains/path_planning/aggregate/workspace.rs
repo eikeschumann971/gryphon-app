@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use super::types::Position2D;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Workspace {
@@ -9,8 +9,10 @@ pub struct Workspace {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorkspaceBounds {
-    pub min_x: f64, pub max_x: f64,
-    pub min_y: f64, pub max_y: f64,
+    pub min_x: f64,
+    pub max_x: f64,
+    pub min_y: f64,
+    pub max_y: f64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

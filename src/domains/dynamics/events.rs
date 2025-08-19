@@ -1,7 +1,7 @@
-use crate::common::DomainEvent;
-use serde::{Deserialize, Serialize};
-use chrono::{DateTime, Utc};
 use super::aggregate::{PhysicsModel, SimulationState};
+use crate::common::DomainEvent;
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum DynamicsEvent {
@@ -44,7 +44,9 @@ impl DomainEvent for DynamicsEvent {
         }
     }
 
-    fn event_version(&self) -> u64 { 1 }
+    fn event_version(&self) -> u64 {
+        1
+    }
 
     fn occurred_at(&self) -> DateTime<Utc> {
         match self {

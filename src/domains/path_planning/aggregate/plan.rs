@@ -1,6 +1,6 @@
-use serde::{Deserialize, Serialize};
+use super::types::{Orientation2D, Position2D};
 use chrono::{DateTime, Utc};
-use super::types::{Position2D, Orientation2D};
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PathPlan {
@@ -17,10 +17,10 @@ pub struct PathPlan {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum PlanStatus {
-    Planning,        // Waiting for assignment
-    Assigned,        // Assigned to a worker but not started
-    InProgress,      // Being processed by a worker
-    Complete,        // Successfully completed
-    Failed(String),  // Failed with reason
-    Executing,       // Being executed by agent
+    Planning,       // Waiting for assignment
+    Assigned,       // Assigned to a worker but not started
+    InProgress,     // Being processed by a worker
+    Complete,       // Successfully completed
+    Failed(String), // Failed with reason
+    Executing,      // Being executed by agent
 }

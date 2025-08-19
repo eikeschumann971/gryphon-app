@@ -1,32 +1,35 @@
-use gryphon_app::domains::path_planning::*;
-use gryphon_app::adapters::inbound::file_event_store::FileEventStore;
-use gryphon_app::common::{EventStore, EventEnvelope, EventMetadata, DomainEvent};
-use gryphon_app::config::Config;
-use tokio::time::{interval, Duration};
-use std::collections::HashMap;
-use uuid::Uuid;
 use chrono::Utc;
+use gryphon_app::adapters::inbound::file_event_store::FileEventStore;
+use gryphon_app::common::{DomainEvent, EventEnvelope, EventMetadata, EventStore};
+use gryphon_app::config::Config;
+use gryphon_app::domains::path_planning::*;
+use gryphon_app::domains::DynLogger;
+use std::collections::HashMap;
 use std::sync::Arc;
+use tokio::time::{interval, Duration};
+use uuid::Uuid;
 
 /// Path Planning Planner Process (Event-Driven)
-/// 
+///
 /// This process manages PathPlanner aggregates using event sourcing and coordinates
 /// between clients and workers through the event store.
 /// It handles:
 /// - Loading PathPlanner state from event store
 /// - Processing PathPlanRequested events
-/// - Publishing WorkerAssignment events 
+/// - Publishing WorkerAssignment events
 /// - Managing worker registrations through events
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("🗺️  Starting Path Planning Planner Service (Event-Driven)");
-    
-    // Initialize tracing
-    tracing_subscriber::fmt::init();
-    
-    let mut planner_service = PathPlannerService::new().await?;
+    // Initialize combined logger (file + console fallback)
+    let logger = gryphon_app::adapters::outbound::init_combined_logger("./domain.log");
+    logger.info("Starting Path Planning Planner Service (Event-Driven)");
+
+    // Tracing/global logger initialization is handled by the injected DomainLogger adapters.
+
+    let mut planner_service = PathPlannerService::new(logger.clone()).await?;
     planner_service.run().await?;
-    
+
     Ok(())
 }
 
@@ -35,6 +38,7 @@ pub struct PathPlannerService {
     event_store: Arc<dyn EventStore>,
     last_processed_version: HashMap<String, u64>,
     available_workers: HashMap<String, WorkerInfo>,
+    logger: DynLogger,
 }
 
 #[derive(Debug, Clone)]
@@ -95,7 +99,7 @@ pub enum PlanResponseStatus {
 }
 
 impl PathPlannerService {
-    pub async fn new() -> Result<Self, Box<dyn std::error::Error>> {
+    pub async fn new(logger: DynLogger) -> Result<Self, Box<dyn std::error::Error>> {
         // For demo purposes, use default config and in-memory event store
         let _config = Config::default();
         println!("📋 Using default configuration for demo");
@@ -103,23 +107,23 @@ impl PathPlannerService {
         // Initialize event store - use file-based store for demo so all processes can share events
         let event_store: Arc<dyn EventStore> = Arc::new(FileEventStore::new("/tmp/gryphon-events"));
         println!("✅ Using file-based event store for demo (shared between processes)");
-        
+
         let mut planners = HashMap::new();
         let planner_id = "main-path-planner".to_string();
-        
+
         // Try to restore planner state from event store
         match event_store.load_events(&planner_id, 0).await {
             Ok(events) => {
                 if events.is_empty() {
                     // No existing events, create new planner and persist creation event
                     let planner = PathPlanner::new(planner_id.clone(), PlanningAlgorithm::AStar);
-                    
+
                     let creation_event = PathPlanningEvent::PlannerCreated {
                         planner_id: planner_id.clone(),
                         algorithm: PlanningAlgorithm::AStar,
                         timestamp: Utc::now(),
                     };
-                    
+
                     let event_envelope = EventEnvelope {
                         event_id: Uuid::new_v4(),
                         aggregate_id: planner_id.clone(),
@@ -135,10 +139,14 @@ impl PathPlannerService {
                         },
                         occurred_at: Utc::now(),
                     };
-                    
-                    event_store.append_events(&planner_id, 0, vec![event_envelope]).await?;
+
+                    event_store
+                        .append_events(&planner_id, 0, vec![event_envelope])
+                        .await?;
                     planners.insert(planner_id.clone(), planner);
-                    println!("✅ Created new PathPlanner with A* algorithm and persisted creation event");
+                    println!(
+                        "✅ Created new PathPlanner with A* algorithm and persisted creation event"
+                    );
                 } else {
                     // Restore from events
                     let planner = PathPlanner::new(planner_id.clone(), PlanningAlgorithm::AStar);
@@ -153,39 +161,42 @@ impl PathPlannerService {
                 planners.insert(planner_id.clone(), planner);
             }
         }
-        
+
         Ok(Self {
             planners,
             event_store,
             last_processed_version: HashMap::new(),
             available_workers: HashMap::new(),
+            logger,
         })
     }
-    
+
     pub async fn run(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         println!("🚀 Path Planning Planner Service is running (Event-Driven)");
-        
+        self.logger
+            .info("Path Planning Planner Service is running (Event-Driven)");
+
         // For demo purposes, register a mock worker immediately
         self.register_mock_worker().await;
-        
+
         println!("📡 Polling event store for new events...");
-        
+
         // Set up a polling timer for new events
         let mut event_poll_timer = interval(Duration::from_secs(2));
         let mut heartbeat = interval(Duration::from_secs(30));
-        
+
         loop {
             tokio::select! {
                 // Poll for new events from event store
                 _ = event_poll_timer.tick() => {
                     self.poll_and_process_events().await?;
                 }
-                
+
                 // Periodic heartbeat and status update
                 _ = heartbeat.tick() => {
                     self.print_status().await;
                 }
-                
+
                 // Handle shutdown signal
                 _ = tokio::signal::ctrl_c() => {
                     println!("🛑 Shutting down Path Planning Planner Service");
@@ -193,42 +204,67 @@ impl PathPlannerService {
                 }
             }
         }
-        
+
         Ok(())
     }
-    
+
     async fn poll_and_process_events(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         let planner_ids: Vec<String> = self.planners.keys().cloned().collect();
-        
+
         for planner_id in planner_ids {
             let last_version = self.last_processed_version.get(&planner_id).unwrap_or(&0);
-            
-            match self.event_store.load_events(&planner_id, *last_version).await {
+
+            match self
+                .event_store
+                .load_events(&planner_id, *last_version)
+                .await
+            {
                 Ok(events) => {
                     if !events.is_empty() {
-                        println!("📥 Found {} new events for planner {}", events.len(), planner_id);
-                        
+                        println!(
+                            "📥 Found {} new events for planner {}",
+                            events.len(),
+                            planner_id
+                        );
+                        self.logger.info(&format!(
+                            "Found {} new events for planner {}",
+                            events.len(),
+                            planner_id
+                        ));
+
                         for event_envelope in events {
                             self.process_event(&planner_id, &event_envelope).await?;
-                            
+
                             // Update last processed version
-                            self.last_processed_version.insert(planner_id.clone(), event_envelope.event_version);
+                            self.last_processed_version
+                                .insert(planner_id.clone(), event_envelope.event_version);
                         }
                     }
                 }
                 Err(e) => {
-                    println!("⚠️  Failed to load events for planner {}: {}", planner_id, e);
+                    println!(
+                        "⚠️  Failed to load events for planner {}: {}",
+                        planner_id, e
+                    );
+                    self.logger.warn(&format!(
+                        "Failed to load events for planner {}: {}",
+                        planner_id, e
+                    ));
                 }
             }
         }
-        
+
         Ok(())
     }
-    
-    async fn process_event(&mut self, planner_id: &str, event_envelope: &EventEnvelope) -> Result<(), Box<dyn std::error::Error>> {
+
+    async fn process_event(
+        &mut self,
+        planner_id: &str,
+        event_envelope: &EventEnvelope,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         // Deserialize the event
         let event: PathPlanningEvent = serde_json::from_value(event_envelope.event_data.clone())?;
-        
+
         match event {
             PathPlanningEvent::PathPlanRequested {
                 request_id,
@@ -245,57 +281,83 @@ impl PathPlannerService {
                 println!("   Request ID: {}", request_id);
                 println!("   Plan ID: {}", plan_id);
                 println!("   Agent: {}", agent_id);
-                println!("   From: ({:.1}, {:.1}) -> To: ({:.1}, {:.1})", 
-                         start_position.x, start_position.y,
-                         destination_position.x, destination_position.y);
-                
+                println!(
+                    "   From: ({:.1}, {:.1}) -> To: ({:.1}, {:.1})",
+                    start_position.x,
+                    start_position.y,
+                    destination_position.x,
+                    destination_position.y
+                );
+
                 // Try to assign to an available worker
                 match self.find_available_worker() {
                     Some(worker_id) => {
                         // Assign to worker with full request data
                         self.assign_plan_to_worker(
-                            &plan_id, 
-                            &worker_id, 
+                            &plan_id,
+                            &worker_id,
                             planner_id,
                             &request_id,
                             &agent_id,
                             &start_position,
                             &destination_position,
                             &start_orientation,
-                            &destination_orientation
-                        ).await?;
-                        
+                            &destination_orientation,
+                        )
+                        .await?;
+
                         // Update worker status
                         if let Some(worker_info) = self.available_workers.get_mut(&worker_id) {
-                            worker_info.status = WorkerStatus::Busy { plan_id: plan_id.clone() };
+                            worker_info.status = WorkerStatus::Busy {
+                                plan_id: plan_id.clone(),
+                            };
                         }
-                        
+
                         println!("✅ Assigned plan {} to worker {}", plan_id, worker_id);
                     }
                     None => {
-                        println!("⚠️  No available workers for plan {}. Request queued.", plan_id);
+                        println!(
+                            "⚠️  No available workers for plan {}. Request queued.",
+                            plan_id
+                        );
                         // In a real system, we would queue the request
                     }
                 }
             }
-            
-            PathPlanningEvent::WorkerRegistered { worker_id, capabilities, .. } => {
-                println!("👷 Worker registered: {} with capabilities: {:?}", worker_id, capabilities);
-                
+
+            PathPlanningEvent::WorkerRegistered {
+                worker_id,
+                capabilities,
+                ..
+            } => {
+                println!(
+                    "👷 Worker registered: {} with capabilities: {:?}",
+                    worker_id, capabilities
+                );
+
                 let worker_info = WorkerInfo {
                     worker_id: worker_id.clone(),
                     capabilities,
                     status: WorkerStatus::Ready,
                     last_heartbeat: Utc::now(),
                 };
-                
+
                 self.available_workers.insert(worker_id, worker_info);
             }
-            
-            PathPlanningEvent::PlanCompleted { plan_id, waypoints, worker_id, .. } => {
-                println!("🎉 Plan completed: {} by worker {:?} with {} waypoints", 
-                         plan_id, worker_id, waypoints.len());
-                
+
+            PathPlanningEvent::PlanCompleted {
+                plan_id,
+                waypoints,
+                worker_id,
+                ..
+            } => {
+                println!(
+                    "🎉 Plan completed: {} by worker {:?} with {} waypoints",
+                    plan_id,
+                    worker_id,
+                    waypoints.len()
+                );
+
                 // Mark worker as ready again
                 if let Some(worker_id) = worker_id {
                     if let Some(worker_info) = self.available_workers.get_mut(&worker_id) {
@@ -304,11 +366,18 @@ impl PathPlannerService {
                     }
                 }
             }
-            
-            PathPlanningEvent::PlanFailed { plan_id, reason, worker_id, .. } => {
-                println!("❌ Plan failed: {} by worker {:?}. Reason: {}", 
-                         plan_id, worker_id, reason);
-                
+
+            PathPlanningEvent::PlanFailed {
+                plan_id,
+                reason,
+                worker_id,
+                ..
+            } => {
+                println!(
+                    "❌ Plan failed: {} by worker {:?}. Reason: {}",
+                    plan_id, worker_id, reason
+                );
+
                 // Mark worker as ready again
                 if let Some(worker_id) = worker_id {
                     if let Some(worker_info) = self.available_workers.get_mut(&worker_id) {
@@ -317,16 +386,16 @@ impl PathPlannerService {
                     }
                 }
             }
-            
+
             _ => {
                 // Handle other events as needed
                 println!("📝 Processed event: {}", event_envelope.event_type);
             }
         }
-        
+
         Ok(())
     }
-    
+
     fn find_available_worker(&self) -> Option<String> {
         for (worker_id, worker_info) in &self.available_workers {
             if matches!(worker_info.status, WorkerStatus::Ready) {
@@ -335,19 +404,19 @@ impl PathPlannerService {
         }
         None
     }
-    
+
     #[allow(clippy::too_many_arguments)]
     async fn assign_plan_to_worker(
-        &self, 
-        plan_id: &str, 
-        worker_id: &str, 
+        &self,
+        plan_id: &str,
+        worker_id: &str,
         planner_id: &str,
         request_id: &str,
         agent_id: &str,
         start_position: &Position2D,
         destination_position: &Position2D,
         start_orientation: &Orientation2D,
-        destination_orientation: &Orientation2D
+        destination_orientation: &Orientation2D,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let event = PathPlanningEvent::PlanAssigned {
             planner_id: planner_id.to_string(),
@@ -362,7 +431,7 @@ impl PathPlannerService {
             timeout_seconds: 300, // 5 minutes timeout
             timestamp: Utc::now(),
         };
-        
+
         let event_envelope = EventEnvelope {
             event_id: Uuid::new_v4(),
             aggregate_id: planner_id.to_string(),
@@ -378,37 +447,50 @@ impl PathPlannerService {
             },
             occurred_at: Utc::now(),
         };
-        
+
         // Publish assignment event
         let current_version = 0; // In a real system, we'd track the version properly
-        self.event_store.append_events(planner_id, current_version, vec![event_envelope]).await?;
-        
-        println!("📤 Published PlanAssigned event for plan {} to worker {}", plan_id, worker_id);
-        
+        self.event_store
+            .append_events(planner_id, current_version, vec![event_envelope])
+            .await?;
+
+        println!(
+            "📤 Published PlanAssigned event for plan {} to worker {}",
+            plan_id, worker_id
+        );
+
         Ok(())
     }
-    
+
     async fn print_status(&self) {
         println!("� Planner Status:");
         println!("   🗺️  Active planners: {}", self.planners.len());
-        println!("   👷 Available workers: {}", 
-                 self.available_workers.values()
-                     .filter(|w| matches!(w.status, WorkerStatus::Ready))
-                     .count());
-        println!("   🔄 Busy workers: {}", 
-                 self.available_workers.values()
-                     .filter(|w| matches!(w.status, WorkerStatus::Busy { .. }))
-                     .count());
-        
+        println!(
+            "   👷 Available workers: {}",
+            self.available_workers
+                .values()
+                .filter(|w| matches!(w.status, WorkerStatus::Ready))
+                .count()
+        );
+        println!(
+            "   🔄 Busy workers: {}",
+            self.available_workers
+                .values()
+                .filter(|w| matches!(w.status, WorkerStatus::Busy { .. }))
+                .count()
+        );
+
         for (worker_id, worker_info) in &self.available_workers {
             match &worker_info.status {
                 WorkerStatus::Ready => println!("     ✅ {}: Ready", worker_id),
-                WorkerStatus::Busy { plan_id } => println!("     🔄 {}: Working on {}", worker_id, plan_id),
+                WorkerStatus::Busy { plan_id } => {
+                    println!("     🔄 {}: Working on {}", worker_id, plan_id)
+                }
                 WorkerStatus::Offline => println!("     ❌ {}: Offline", worker_id),
             }
         }
     }
-    
+
     async fn register_mock_worker(&mut self) {
         let worker_id = "worker-1".to_string();
         let worker_info = WorkerInfo {
@@ -417,8 +499,9 @@ impl PathPlannerService {
             status: WorkerStatus::Ready,
             last_heartbeat: Utc::now(),
         };
-        
-        self.available_workers.insert(worker_id.clone(), worker_info);
+
+        self.available_workers
+            .insert(worker_id.clone(), worker_info);
         println!("🤖 Registered mock worker: {} for demo purposes", worker_id);
     }
 }

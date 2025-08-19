@@ -1,6 +1,6 @@
+use super::events::GUIEvent;
 use crate::common::{AggregateRoot, DomainResult};
 use serde::{Deserialize, Serialize};
-use super::events::GUIEvent;
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -78,7 +78,7 @@ impl GUIApplication {
             name,
             timestamp: chrono::Utc::now(),
         };
-        
+
         app.add_event(event);
         app
     }
@@ -86,13 +86,23 @@ impl GUIApplication {
 
 impl AggregateRoot for GUIApplication {
     type Event = GUIEvent;
-    fn aggregate_id(&self) -> &str { &self.id }
-    fn version(&self) -> u64 { self.version }
-    fn apply(&mut self, _event: &Self::Event) -> DomainResult<()> { 
-        self.version += 1; 
-        Ok(()) 
+    fn aggregate_id(&self) -> &str {
+        &self.id
     }
-    fn uncommitted_events(&self) -> &[Self::Event] { &self.uncommitted_events }
-    fn mark_events_as_committed(&mut self) { self.uncommitted_events.clear(); }
-    fn add_event(&mut self, event: Self::Event) { self.uncommitted_events.push(event); }
+    fn version(&self) -> u64 {
+        self.version
+    }
+    fn apply(&mut self, _event: &Self::Event) -> DomainResult<()> {
+        self.version += 1;
+        Ok(())
+    }
+    fn uncommitted_events(&self) -> &[Self::Event] {
+        &self.uncommitted_events
+    }
+    fn mark_events_as_committed(&mut self) {
+        self.uncommitted_events.clear();
+    }
+    fn add_event(&mut self, event: Self::Event) {
+        self.uncommitted_events.push(event);
+    }
 }

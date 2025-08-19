@@ -1,7 +1,7 @@
+use super::events::TechnicalAgentEvent;
 use crate::common::{AggregateRoot, DomainResult};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-use super::events::TechnicalAgentEvent;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TechnicalAgent {
@@ -129,7 +129,7 @@ impl TechnicalAgent {
             agent_type,
             timestamp: chrono::Utc::now(),
         };
-        
+
         agent.add_event(event);
         agent
     }
@@ -185,13 +185,23 @@ impl AggregateRoot for TechnicalAgent {
 
     fn apply(&mut self, event: &Self::Event) -> DomainResult<()> {
         match event {
-            TechnicalAgentEvent::AgentCreated { agent_id, name, agent_type, .. } => {
+            TechnicalAgentEvent::AgentCreated {
+                agent_id,
+                name,
+                agent_type,
+                ..
+            } => {
                 self.id = agent_id.clone();
                 self.name = name.clone();
                 self.agent_type = agent_type.clone();
                 self.status = TechnicalStatus::Initializing;
             }
-            TechnicalAgentEvent::CapabilityAdded { capability_id, name, description, .. } => {
+            TechnicalAgentEvent::CapabilityAdded {
+                capability_id,
+                name,
+                description,
+                ..
+            } => {
                 let capability = Capability {
                     id: *capability_id,
                     name: name.clone(),

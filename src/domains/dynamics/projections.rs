@@ -1,6 +1,6 @@
 // Dynamics projections - simplified implementation
-use serde::{Deserialize, Serialize};
 use super::aggregate::SimulationState;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DynamicsProjection {
