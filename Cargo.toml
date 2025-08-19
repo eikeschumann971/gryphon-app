@@ -57,6 +57,18 @@ testcontainers-modules = { version = "0.12.1", features = ["postgres"] }
 name = "gryphon-app"
 path = "src/main.rs"
 
+[[bin]]
+name = "pathplan_worker"
+path = "src/bin/pathplan_worker/main.rs"
+
+[[bin]]
+name = "pathplan_planner"
+path = "src/bin/pathplan_planner.rs"
+
+[[bin]]
+name = "pathplan_client"
+path = "src/bin/pathplan_client.rs"
+
 
 [lib]
 name = "gryphon_app"
