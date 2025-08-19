@@ -3,7 +3,7 @@ use tokio::time::{sleep, Duration};
 use uuid::Uuid;
 use chrono::Utc;
 use rand::Rng;
-use std::f64::consts::{PI, TAU};
+use std::f64::consts::PI;
 
 /// Path Planning Client Process
 /// 
@@ -46,8 +46,8 @@ impl PathPlanClient {
                 agent_id: "office-robot-001".to_string(),
                 start_position: Position2D { x: -50.0, y: -30.0 },
                 destination_position: Position2D { x: 40.0, y: 25.0 },
-                start_orientation: Orientation2D { angle: 0.0 },
-                destination_orientation: Orientation2D { angle: 1.57 }, // 90 degrees
+                start_orientation: Orientation2D { angle: 0.0 }, // 0 degrees
+                destination_orientation: Orientation2D { angle: 90.0 / 180.0 * PI }, // 90 degrees
             },
             PlanningScenario {
                 name: "Warehouse Pickup".to_string(),
@@ -56,7 +56,7 @@ impl PathPlanClient {
                 start_position: Position2D { x: -80.0, y: 60.0 },
                 destination_position: Position2D { x: 30.0, y: -40.0 },
                 start_orientation: Orientation2D { angle: PI }, // 180 degrees
-                destination_orientation: Orientation2D { angle: 0.0 },
+                destination_orientation: Orientation2D { angle: 0.0 }, // 0 degrees
             },
             PlanningScenario {
                 name: "Hospital Delivery".to_string(),
@@ -64,8 +64,8 @@ impl PathPlanClient {
                 agent_id: "medbot-alpha".to_string(),
                 start_position: Position2D { x: 15.0, y: -60.0 },
                 destination_position: Position2D { x: -25.0, y: 70.0 },
-                start_orientation: Orientation2D { angle: 1.57 },
-                destination_orientation: Orientation2D { angle: 4.71 }, // 270 degrees
+                start_orientation: Orientation2D { angle: 90.0 / 180.0 * PI },
+                destination_orientation: Orientation2D { angle: 270.0 / 180.0 * PI }, // 270 degrees
             },
             PlanningScenario {
                 name: "Security Patrol".to_string(),
@@ -73,8 +73,8 @@ impl PathPlanClient {
                 agent_id: "security-bot-9".to_string(),
                 start_position: Position2D { x: 0.0, y: 0.0 },
                 destination_position: Position2D { x: 85.0, y: -85.0 },
-                start_orientation: Orientation2D { angle: 0.0 },
-                destination_orientation: Orientation2D { angle: 2.36 }, // 135 degrees
+                start_orientation: Orientation2D { angle: 0.0 }, // 0 degrees
+                destination_orientation: Orientation2D { angle: 135.0 / 180.0 * PI }, // 135 degrees
             },
             PlanningScenario {
                 name: "Kitchen Service".to_string(),
@@ -82,8 +82,8 @@ impl PathPlanClient {
                 agent_id: "kitchen-assistant".to_string(),
                 start_position: Position2D { x: -45.0, y: 10.0 },
                 destination_position: Position2D { x: 55.0, y: -20.0 },
-                start_orientation: Orientation2D { angle: 4.71 },
-                destination_orientation: Orientation2D { angle: 1.57 },
+                start_orientation: Orientation2D { angle: 270.0 / 180.0 * PI },
+                destination_orientation: Orientation2D { angle: 90.0 / 180.0 * PI },
             },
         ];
         
@@ -156,8 +156,8 @@ impl PathPlanClient {
                 agent_id: format!("{}-rand", base_scenario.agent_id),
                 start_position: Position2D { x: start_x, y: start_y },
                 destination_position: Position2D { x: dest_x, y: dest_y },
-                start_orientation: Orientation2D { angle: rng.gen_range(0.0..TAU) },
-                destination_orientation: Orientation2D { angle: rng.gen_range(0.0..TAU) },
+                start_orientation: Orientation2D { angle: rng.gen_range(0.0..360.0) / 180.0 * PI },
+                destination_orientation: Orientation2D { angle: rng.gen_range(0.0..360.0) / 180.0 * PI },
             };
             
             let request = self.create_request_from_scenario(&random_scenario).await;
