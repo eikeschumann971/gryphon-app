@@ -14,17 +14,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Ok(l) => l,
         Err(e) => {
             eprintln!("Failed to initialize file logger: {}", e);
-            // Fallback: create a no-op logger by creating a Bridge that logs to stdout via log
-            // We'll use the init_file_logger's failure as fatal-ish but continue with a simple bridge.
-            // Construct a simple bridge that forwards to the log macros (which currently go to tracing console)
-            struct ConsoleLogger;
-            impl gryphon_app::domains::logger::DomainLogger for ConsoleLogger {
-                fn info(&self, msg: &str) { println!("{}", msg); }
-                fn warn(&self, msg: &str) { println!("WARN: {}", msg); }
-                fn error(&self, msg: &str) { eprintln!("ERROR: {}", msg); }
-            }
-
-            std::sync::Arc::new(ConsoleLogger {}) as gryphon_app::domains::DynLogger
+            gryphon_app::adapters::outbound::init_console_logger()
         }
     };
     

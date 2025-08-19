@@ -23,14 +23,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Ok(l) => l,
         Err(e) => {
             eprintln!("Failed to initialize file logger: {}", e);
-            // Fallback logger that prints to stdout/stderr so the app keeps running
-            struct ConsoleLogger;
-            impl gryphon_app::domains::logger::DomainLogger for ConsoleLogger {
-                fn info(&self, msg: &str) { println!("{}", msg); }
-                fn warn(&self, msg: &str) { println!("WARN: {}", msg); }
-                fn error(&self, msg: &str) { eprintln!("ERROR: {}", msg); }
-            }
-            std::sync::Arc::new(ConsoleLogger {})
+            gryphon_app::adapters::outbound::init_console_logger()
         }
     };
 
