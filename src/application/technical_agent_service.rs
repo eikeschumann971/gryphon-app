@@ -1,6 +1,6 @@
 // Technical Agent Service - simplified implementation
 use crate::common::ApplicationResult;
-use crate::domains::technical_agent::{TechnicalAgentCommandActor, AgentType};
+use crate::domains::technical_agent::{AgentType, TechnicalAgentCommandActor};
 
 pub struct TechnicalAgentService {
     command_actor: TechnicalAgentCommandActor,
@@ -11,7 +11,12 @@ impl TechnicalAgentService {
         Self { command_actor }
     }
 
-    pub async fn create_agent(&self, agent_id: String, name: String, agent_type: AgentType) -> ApplicationResult<()> {
+    pub async fn create_agent(
+        &self,
+        agent_id: String,
+        name: String,
+        agent_type: AgentType,
+    ) -> ApplicationResult<()> {
         self.command_actor
             .create_agent(agent_id, name, agent_type)
             .await

@@ -1,13 +1,13 @@
 use crate::common::aggregate::AggregateRoot;
-use crate::common::{DomainResult, DomainError};
-use serde::{Deserialize, Serialize};
+use crate::common::{DomainError, DomainResult};
 use crate::domains::path_planning::events::PathPlanningEvent;
-use chrono::Utc;
-use uuid::Uuid;
-use crate::domains::path_planning::types::{Position2D, PathPlanRequest, PlanningAlgorithm};
-use crate::domains::path_planning::worker::{PathPlanWorker, PlanAssignment};
 use crate::domains::path_planning::plan::PathPlan;
+use crate::domains::path_planning::types::{PathPlanRequest, PlanningAlgorithm, Position2D};
+use crate::domains::path_planning::worker::{PathPlanWorker, PlanAssignment};
 use crate::domains::path_planning::workspace::{Workspace, WorkspaceBounds};
+use chrono::Utc;
+use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PathPlanner {
@@ -20,7 +20,6 @@ pub struct PathPlanner {
     pub version: u64,
     #[serde(skip)]
     uncommitted_events: Vec<PathPlanningEvent>,
-
 }
 
 impl PathPlanner {
@@ -43,8 +42,10 @@ impl PathPlanner {
             algorithm: algorithm.clone(),
             workspace: Workspace {
                 bounds: WorkspaceBounds {
-                    min_x: -100.0, max_x: 100.0,
-                    min_y: -100.0, max_y: 100.0,
+                    min_x: -100.0,
+                    max_x: 100.0,
+                    min_y: -100.0,
+                    max_y: 100.0,
                 },
                 obstacles: Vec::new(),
             },
@@ -60,7 +61,7 @@ impl PathPlanner {
             algorithm,
             timestamp: chrono::Utc::now(),
         };
-        
+
         planner.add_event(event);
         planner
     }
@@ -94,8 +95,16 @@ impl PathPlanner {
         Ok(())
     }
 
-    pub fn register_worker(&mut self, worker_id: String, algorithm_capabilities: Vec<PlanningAlgorithm>) -> DomainResult<()> {
-        if self.registered_workers.iter().any(|w| w.worker_id == worker_id) {
+    pub fn register_worker(
+        &mut self,
+        worker_id: String,
+        algorithm_capabilities: Vec<PlanningAlgorithm>,
+    ) -> DomainResult<()> {
+        if self
+            .registered_workers
+            .iter()
+            .any(|w| w.worker_id == worker_id)
+        {
             return Err(DomainError::InvalidCommand {
                 reason: format!("Worker {} is already registered", worker_id),
             });
@@ -112,7 +121,11 @@ impl PathPlanner {
     }
 
     pub fn handle_worker_ready(&mut self, worker_id: String) -> DomainResult<()> {
-        if !self.registered_workers.iter().any(|w| w.worker_id == worker_id) {
+        if !self
+            .registered_workers
+            .iter()
+            .any(|w| w.worker_id == worker_id)
+        {
             return Err(DomainError::InvalidCommand {
                 reason: format!("Worker {} is not registered", worker_id),
             });
@@ -128,7 +141,11 @@ impl PathPlanner {
         Ok(())
     }
 
-    pub fn handle_plan_assignment_accepted(&mut self, worker_id: String, plan_id: String) -> DomainResult<()> {
+    pub fn handle_plan_assignment_accepted(
+        &mut self,
+        worker_id: String,
+        plan_id: String,
+    ) -> DomainResult<()> {
         let event = PathPlanningEvent::PlanAssignmentAccepted {
             planner_id: self.id.clone(),
             plan_id,
@@ -140,7 +157,12 @@ impl PathPlanner {
         Ok(())
     }
 
-    pub fn handle_plan_completed(&mut self, worker_id: String, plan_id: String, waypoints: Vec<Position2D>) -> DomainResult<()> {
+    pub fn handle_plan_completed(
+        &mut self,
+        worker_id: String,
+        plan_id: String,
+        waypoints: Vec<Position2D>,
+    ) -> DomainResult<()> {
         let event = PathPlanningEvent::PlanCompleted {
             planner_id: self.id.clone(),
             plan_id,
@@ -161,7 +183,12 @@ impl PathPlanner {
         Ok(())
     }
 
-    pub fn handle_plan_failed(&mut self, worker_id: String, plan_id: String, reason: String) -> DomainResult<()> {
+    pub fn handle_plan_failed(
+        &mut self,
+        worker_id: String,
+        plan_id: String,
+        reason: String,
+    ) -> DomainResult<()> {
         let event = PathPlanningEvent::PlanFailed {
             planner_id: self.id.clone(),
             plan_id,
@@ -184,7 +211,9 @@ impl PathPlanner {
 
     pub fn is_position_in_workspace(&self, position: &Position2D) -> bool {
         let bounds = &self.workspace.bounds;
-        position.x >= bounds.min_x && position.x <= bounds.max_x &&
-        position.y >= bounds.min_y && position.y <= bounds.max_y
+        position.x >= bounds.min_x
+            && position.x <= bounds.max_x
+            && position.y >= bounds.min_y
+            && position.y <= bounds.max_y
     }
 }

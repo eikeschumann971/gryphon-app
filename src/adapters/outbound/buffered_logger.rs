@@ -15,7 +15,10 @@ struct LogMessage {
 
 /// Non-blocking buffered logger. Messages are forwarded to the provided `bridge`
 /// from a background task. `capacity` controls the channel buffer size.
-pub fn init_buffered_logger(bridge: Arc<dyn DomainLogger>, capacity: usize) -> Arc<dyn DomainLogger> {
+pub fn init_buffered_logger(
+    bridge: Arc<dyn DomainLogger>,
+    capacity: usize,
+) -> Arc<dyn DomainLogger> {
     let (tx, mut rx) = mpsc::channel::<LogMessage>(capacity);
 
     // Spawn background task to drain the channel and forward to the bridge.
@@ -37,15 +40,24 @@ pub fn init_buffered_logger(bridge: Arc<dyn DomainLogger>, capacity: usize) -> A
     impl DomainLogger for BufferedLogger {
         fn info(&self, msg: &str) {
             // Non-blocking: try_send, drop on full
-            let _ = self.sender.try_send(LogMessage { level: Level::Info, msg: msg.to_string() });
+            let _ = self.sender.try_send(LogMessage {
+                level: Level::Info,
+                msg: msg.to_string(),
+            });
         }
 
         fn warn(&self, msg: &str) {
-            let _ = self.sender.try_send(LogMessage { level: Level::Warn, msg: msg.to_string() });
+            let _ = self.sender.try_send(LogMessage {
+                level: Level::Warn,
+                msg: msg.to_string(),
+            });
         }
 
         fn error(&self, msg: &str) {
-            let _ = self.sender.try_send(LogMessage { level: Level::Error, msg: msg.to_string() });
+            let _ = self.sender.try_send(LogMessage {
+                level: Level::Error,
+                msg: msg.to_string(),
+            });
         }
     }
 

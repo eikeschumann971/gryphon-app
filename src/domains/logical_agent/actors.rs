@@ -1,9 +1,9 @@
-use crate::common::{EventStore, EventEnvelope, EventMetadata, DomainEvent};
 use super::events::LogicalAgentEvent;
-use super::projections::{LogicalAgentOverview, ObjectiveProjection, KnowledgeBaseAnalytics};
-use tokio::sync::{mpsc, RwLock};
+use super::projections::{KnowledgeBaseAnalytics, LogicalAgentOverview, ObjectiveProjection};
+use crate::common::{DomainEvent, EventEnvelope, EventMetadata, EventStore};
 use std::collections::HashMap;
 use std::sync::Arc;
+use tokio::sync::{mpsc, RwLock};
 use uuid::Uuid;
 
 /// Actor responsible for handling logical agent events
@@ -69,7 +69,8 @@ impl LogicalAgentEventActor {
 
     pub async fn get_objectives(&self, agent_id: &str) -> Vec<ObjectiveProjection> {
         let store = self.projection_store.read().await;
-        store.objectives
+        store
+            .objectives
             .values()
             .filter(|obj| obj.agent_id == agent_id)
             .cloned()
@@ -98,7 +99,6 @@ impl LogicalAgentProjectionStore {
             knowledge_analytics: HashMap::new(),
         }
     }
-
 }
 
 impl Default for LogicalAgentProjectionStore {
@@ -110,21 +110,27 @@ impl Default for LogicalAgentProjectionStore {
 impl LogicalAgentProjectionStore {
     pub fn apply_event(&mut self, event: &LogicalAgentEvent) {
         match event {
-            LogicalAgentEvent::AgentCreated { agent_id, name, timestamp, .. } => {
-                let overview = LogicalAgentOverview::new(agent_id.clone(), name.clone(), *timestamp);
+            LogicalAgentEvent::AgentCreated {
+                agent_id,
+                name,
+                timestamp,
+                ..
+            } => {
+                let overview =
+                    LogicalAgentOverview::new(agent_id.clone(), name.clone(), *timestamp);
                 self.agent_overviews.insert(agent_id.clone(), overview);
-                
+
                 let analytics = KnowledgeBaseAnalytics::new(agent_id.clone());
                 self.knowledge_analytics.insert(agent_id.clone(), analytics);
             }
-            LogicalAgentEvent::ObjectiveAdded { 
-                agent_id, 
-                objective_id, 
-                description, 
-                priority, 
-                constraints, 
-                timestamp, 
-                .. 
+            LogicalAgentEvent::ObjectiveAdded {
+                agent_id,
+                objective_id,
+                description,
+                priority,
+                constraints,
+                timestamp,
+                ..
             } => {
                 let objective = ObjectiveProjection::new(
                     *objective_id,
@@ -150,8 +156,8 @@ impl LogicalAgentProjectionStore {
 
         // Update objectives if relevant
         match event {
-            LogicalAgentEvent::ObjectiveCompleted { objective_id, .. } |
-            LogicalAgentEvent::ObjectiveFailed { objective_id, .. } => {
+            LogicalAgentEvent::ObjectiveCompleted { objective_id, .. }
+            | LogicalAgentEvent::ObjectiveFailed { objective_id, .. } => {
                 if let Some(objective) = self.objectives.get_mut(objective_id) {
                     objective.apply_event(event);
                 }
@@ -209,7 +215,11 @@ impl LogicalAgentCommandActor {
         Ok(objective_id)
     }
 
-    pub async fn complete_objective(&self, agent_id: String, objective_id: Uuid) -> Result<(), String> {
+    pub async fn complete_objective(
+        &self,
+        agent_id: String,
+        objective_id: Uuid,
+    ) -> Result<(), String> {
         let event = LogicalAgentEvent::ObjectiveCompleted {
             agent_id,
             objective_id,

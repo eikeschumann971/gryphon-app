@@ -1,15 +1,15 @@
-use crate::common::{EventStore, EventEnvelope};
+use crate::common::{EventEnvelope, EventStore};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use rdkafka::config::ClientConfig;
-use rdkafka::producer::{FutureProducer, FutureRecord};
 use rdkafka::consumer::{Consumer, StreamConsumer};
+use rdkafka::producer::{FutureProducer, FutureRecord};
 use rdkafka::Message;
 use serde_json;
 use std::time::Duration;
 
 /// Kafka-based EventStore implementation for distributed event-driven architecture
-/// 
+///
 /// This implementation stores events in Kafka topics and allows for real-time
 /// event consumption across multiple processes
 pub struct KafkaEventStore {
@@ -19,7 +19,11 @@ pub struct KafkaEventStore {
 }
 
 impl KafkaEventStore {
-    pub async fn new(bootstrap_servers: &str, topic_name: &str, group_id: &str) -> Result<Self, String> {
+    pub async fn new(
+        bootstrap_servers: &str,
+        topic_name: &str,
+        group_id: &str,
+    ) -> Result<Self, String> {
         let producer: FutureProducer = ClientConfig::new()
             .set("bootstrap.servers", bootstrap_servers)
             .set("client.id", "gryphon-producer")
@@ -56,7 +60,7 @@ impl EventStore for KafkaEventStore {
     ) -> Result<(), String> {
         for event in events {
             let key = format!("{}:{}", event.aggregate_type, aggregate_id);
-            
+
             let payload = serde_json::to_string(&event)
                 .map_err(|e| format!("Failed to serialize event: {}", e))?;
 
@@ -85,7 +89,7 @@ impl EventStore for KafkaEventStore {
 
         let mut events = Vec::new();
         let timeout = Duration::from_secs(2);
-        
+
         // Read all available messages
         let start_time = std::time::Instant::now();
         while start_time.elapsed() < timeout {
@@ -123,7 +127,7 @@ impl EventStore for KafkaEventStore {
 
         let mut events = Vec::new();
         let timeout = Duration::from_millis(500); // Reduced timeout for better responsiveness
-        
+
         // Read all available messages
         let start_time = std::time::Instant::now();
         while start_time.elapsed() < timeout {

@@ -1,10 +1,10 @@
-mod worker;
-mod planning;
-mod mock;
 mod communication;
+mod mock;
+mod planning;
+mod worker;
 
-use worker::run_worker;
 use gryphon_app::adapters::outbound::file_logger::init_file_logger;
+use worker::run_worker;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -17,11 +17,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             gryphon_app::adapters::outbound::init_console_logger()
         }
     };
-    
+
     // Initialize tracing
     tracing_subscriber::fmt::init();
-    
+
     run_worker(logger).await?;
-    
+
     Ok(())
 }

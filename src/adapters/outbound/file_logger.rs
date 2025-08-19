@@ -1,4 +1,4 @@
-use crate::domains::logger::{FileLogger, DomainLogger};
+use crate::domains::logger::{DomainLogger, FileLogger};
 use std::sync::Arc;
 
 struct BridgeLogger;

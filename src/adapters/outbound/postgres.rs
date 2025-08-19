@@ -1,4 +1,4 @@
-use crate::common::{SnapshotStore, Snapshot};
+use crate::common::{Snapshot, SnapshotStore};
 use crate::config::PostgresConfig;
 use async_trait::async_trait;
 use deadpool_postgres::{Config, Pool, Runtime};
@@ -16,21 +16,24 @@ impl PostgresSnapshotStore {
         pg_config.dbname = Some(config.database);
         pg_config.user = Some(config.username);
         pg_config.password = Some(config.password);
-        
+
         let pool = pg_config
             .create_pool(Some(Runtime::Tokio1), NoTls)
             .map_err(|e| format!("Failed to create PostgreSQL pool: {}", e))?;
 
         let store = Self { pool };
-        
+
         // Initialize database schema
         store.initialize_schema().await?;
-        
+
         Ok(store)
     }
 
     async fn initialize_schema(&self) -> Result<(), String> {
-        let client = self.pool.get().await
+        let client = self
+            .pool
+            .get()
+            .await
             .map_err(|e| format!("Failed to get database connection: {}", e))?;
 
         let schema = r#"
@@ -54,7 +57,9 @@ impl PostgresSnapshotStore {
             ON snapshots(aggregate_id, aggregate_version DESC);
         "#;
 
-        client.batch_execute(schema).await
+        client
+            .batch_execute(schema)
+            .await
             .map_err(|e| format!("Failed to initialize database schema: {}", e))?;
 
         Ok(())
@@ -64,7 +69,10 @@ impl PostgresSnapshotStore {
 #[async_trait]
 impl SnapshotStore for PostgresSnapshotStore {
     async fn save_snapshot(&self, snapshot: Snapshot) -> Result<(), String> {
-        let client = self.pool.get().await
+        let client = self
+            .pool
+            .get()
+            .await
             .map_err(|e| format!("Failed to get database connection: {}", e))?;
 
         let stmt = client.prepare(
@@ -76,18 +84,20 @@ impl SnapshotStore for PostgresSnapshotStore {
         ).await
         .map_err(|e| format!("Failed to prepare statement: {}", e))?;
 
-        client.execute(
-            &stmt,
-            &[
-                &snapshot.snapshot_id,
-                &snapshot.aggregate_id,
-                &snapshot.aggregate_type,
-                &(snapshot.aggregate_version as i64),
-                &snapshot.snapshot_data,
-                &snapshot.created_at,
-            ],
-        ).await
-        .map_err(|e| format!("Failed to save snapshot: {}", e))?;
+        client
+            .execute(
+                &stmt,
+                &[
+                    &snapshot.snapshot_id,
+                    &snapshot.aggregate_id,
+                    &snapshot.aggregate_type,
+                    &(snapshot.aggregate_version as i64),
+                    &snapshot.snapshot_data,
+                    &snapshot.created_at,
+                ],
+            )
+            .await
+            .map_err(|e| format!("Failed to save snapshot: {}", e))?;
 
         Ok(())
     }
@@ -97,7 +107,10 @@ impl SnapshotStore for PostgresSnapshotStore {
         aggregate_id: &str,
         max_version: Option<u64>,
     ) -> Result<Option<Snapshot>, String> {
-        let client = self.pool.get().await
+        let client = self
+            .pool
+            .get()
+            .await
             .map_err(|e| format!("Failed to get database connection: {}", e))?;
 
         let row = if let Some(max_ver) = max_version {
@@ -140,14 +153,19 @@ impl SnapshotStore for PostgresSnapshotStore {
         aggregate_id: &str,
         version: u64,
     ) -> Result<(), String> {
-        let client = self.pool.get().await
+        let client = self
+            .pool
+            .get()
+            .await
             .map_err(|e| format!("Failed to get database connection: {}", e))?;
 
-        client.execute(
-            "DELETE FROM snapshots WHERE aggregate_id = $1 AND aggregate_version < $2",
-            &[&aggregate_id, &(version as i64)],
-        ).await
-        .map_err(|e| format!("Failed to delete old snapshots: {}", e))?;
+        client
+            .execute(
+                "DELETE FROM snapshots WHERE aggregate_id = $1 AND aggregate_version < $2",
+                &[&aggregate_id, &(version as i64)],
+            )
+            .await
+            .map_err(|e| format!("Failed to delete old snapshots: {}", e))?;
 
         Ok(())
     }

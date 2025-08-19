@@ -3,19 +3,19 @@ use serde::{Deserialize, Serialize};
 
 pub trait AggregateRoot: Send + Sync + Clone {
     type Event: DomainEvent + Serialize + for<'de> Deserialize<'de>;
-    
+
     fn aggregate_id(&self) -> &str;
     fn version(&self) -> u64;
-    
+
     /// Apply an event to update the aggregate state
     fn apply(&mut self, event: &Self::Event) -> DomainResult<()>;
-    
+
     /// Get uncommitted events
     fn uncommitted_events(&self) -> &[Self::Event];
-    
+
     /// Mark events as committed
     fn mark_events_as_committed(&mut self);
-    
+
     /// Add a new event to the uncommitted events list
     fn add_event(&mut self, event: Self::Event);
 }
@@ -48,12 +48,12 @@ impl<T: AggregateRoot> AggregateStore<T> {
 
     pub fn load_from_history(aggregate: T, events: Vec<T::Event>) -> DomainResult<Self> {
         let mut store = Self::new(aggregate);
-        
+
         for event in events {
             store.aggregate.apply(&event)?;
             store.version += 1;
         }
-        
+
         Ok(store)
     }
 }

@@ -1,6 +1,6 @@
-use std::sync::Arc;
 use chrono::Utc;
-use log::{info as log_info, warn as log_warn, error as log_error};
+use log::{error as log_error, info as log_info, warn as log_warn};
+use std::sync::Arc;
 
 /// Domain-level logging port (Hexagonal port).
 /// Keep this API intentionally small and non-fallible from the domain perspective.

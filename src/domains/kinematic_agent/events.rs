@@ -1,7 +1,7 @@
+use super::aggregate::{Acceleration3D, KinematicsModel, Orientation, Position3D, Velocity3D};
 use crate::common::DomainEvent;
-use serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc};
-use super::aggregate::{Position3D, Velocity3D, Acceleration3D, Orientation, KinematicsModel};
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum KinematicAgentEvent {

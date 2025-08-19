@@ -1,7 +1,7 @@
+use super::aggregate::{Orientation2D, PlanningAlgorithm, Position2D};
 use crate::common::DomainEvent;
-use serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc};
-use super::aggregate::{PlanningAlgorithm, Position2D, Orientation2D};
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum PathPlanningEvent {
@@ -21,7 +21,7 @@ pub enum PathPlanningEvent {
         destination_orientation: Orientation2D,
         timestamp: DateTime<Utc>,
     },
-    
+
     // Worker lifecycle events
     WorkerRegistered {
         planner_id: String,
@@ -57,7 +57,7 @@ pub enum PathPlanningEvent {
         worker_id: String,
         timestamp: DateTime<Utc>,
     },
-    
+
     // Work assignment events
     PlanAssigned {
         planner_id: String,
@@ -91,7 +91,7 @@ pub enum PathPlanningEvent {
         worker_id: String,
         timestamp: DateTime<Utc>,
     },
-    
+
     // Legacy events
     PlanRequested {
         planner_id: String,
@@ -158,7 +158,9 @@ impl DomainEvent for PathPlanningEvent {
         }
     }
 
-    fn event_version(&self) -> u64 { 1 }
+    fn event_version(&self) -> u64 {
+        1
+    }
 
     fn occurred_at(&self) -> DateTime<Utc> {
         match self {

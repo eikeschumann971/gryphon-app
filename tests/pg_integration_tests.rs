@@ -1,9 +1,9 @@
 #[cfg(feature = "pg_integration")]
-use gryphon_app::adapters::outbound::postgres_graph_store::PostgresGraphStore;
+use deadpool_postgres::Config as DeadPoolConfig;
 #[cfg(feature = "pg_integration")]
 use gryphon_app::adapters::outbound::path_planning_data::FilesystemDataSource;
 #[cfg(feature = "pg_integration")]
-use deadpool_postgres::Config as DeadPoolConfig;
+use gryphon_app::adapters::outbound::postgres_graph_store::PostgresGraphStore;
 #[cfg(feature = "pg_integration")]
 use tokio_postgres::NoTls;
 
@@ -17,12 +17,18 @@ async fn test_postgres_graph_store_roundtrip() -> Result<(), Box<dyn std::error:
 
     // Use environment variables set by the helper script or CI. Defaults to localhost:5432
     let host = std::env::var("PG_TEST_HOST").unwrap_or_else(|_| "127.0.0.1".to_string());
-    let port = std::env::var("PG_TEST_PORT").ok().and_then(|s| s.parse::<u16>().ok()).unwrap_or(5432);
+    let port = std::env::var("PG_TEST_PORT")
+        .ok()
+        .and_then(|s| s.parse::<u16>().ok())
+        .unwrap_or(5432);
     let user = std::env::var("PG_TEST_USER").unwrap_or_else(|_| "postgres".to_string());
     let password = std::env::var("PG_TEST_PASSWORD").unwrap_or_else(|_| "postgres".to_string());
     let db = std::env::var("PG_TEST_DB").unwrap_or_else(|_| "postgres".to_string());
 
-    let conn_str = format!("host={} port={} user={} password={} dbname={}", host, port, user, password, db);
+    let conn_str = format!(
+        "host={} port={} user={} password={} dbname={}",
+        host, port, user, password, db
+    );
 
     let mut dp_cfg = DeadPoolConfig::new();
     dp_cfg.host = Some(host.to_string());
@@ -30,7 +36,9 @@ async fn test_postgres_graph_store_roundtrip() -> Result<(), Box<dyn std::error:
     dp_cfg.user = Some(user.to_string());
     dp_cfg.password = Some(password.to_string());
     dp_cfg.dbname = Some(db.to_string());
-    let pool = dp_cfg.create_pool(None, NoTls).expect("failed to create test pg pool");
+    let pool = dp_cfg
+        .create_pool(None, NoTls)
+        .expect("failed to create test pg pool");
     let pg = PostgresGraphStore::new(pool);
 
     // Wait for Postgres to accept connections (simple retry loop)
@@ -38,7 +46,9 @@ async fn test_postgres_graph_store_roundtrip() -> Result<(), Box<dyn std::error:
     for _ in 0..10 {
         match tokio_postgres::connect(&conn_str, tokio_postgres::NoTls).await {
             Ok((client, connection)) => {
-                tokio::spawn(async move { let _ = connection.await; });
+                tokio::spawn(async move {
+                    let _ = connection.await;
+                });
                 let _ = client.simple_query("SELECT 1").await;
                 connected = true;
                 break;
@@ -48,12 +58,16 @@ async fn test_postgres_graph_store_roundtrip() -> Result<(), Box<dyn std::error:
             }
         }
     }
-    if !connected { return Err("Postgres did not become ready".into()); }
+    if !connected {
+        return Err("Postgres did not become ready".into());
+    }
 
     // Build a tiny graph using FilesystemDataSource builder
     let fs = FilesystemDataSource::new(None);
     let gj = r#"{"type":"FeatureCollection","features":[{"type":"Feature","geometry":{"type":"Point","coordinates":[1.0,2.0]}}]}"#;
-    let graph = fs.build_graph_struct(gj).map_err(|e| format!("build graph err: {:?}", e))?;
+    let graph = fs
+        .build_graph_struct(gj)
+        .map_err(|e| format!("build graph err: {:?}", e))?;
 
     // Serialize into bytes using the filesystem save format (with header)
     let mut bytes = Vec::new();
@@ -71,10 +85,15 @@ async fn test_postgres_graph_store_roundtrip() -> Result<(), Box<dyn std::error:
     use gryphon_app::domains::path_planning::ports::GraphStoreAsync as _;
 
     // save via PostgresGraphStore
-    pg.save_graph_bytes("test_graph.bin", &bytes).await.map_err(|e| format!("pg save err: {:?}", e))?;
+    pg.save_graph_bytes("test_graph.bin", &bytes)
+        .await
+        .map_err(|e| format!("pg save err: {:?}", e))?;
 
     // load and compare
-    let loaded = pg.load_graph_bytes("test_graph.bin").await.map_err(|e| format!("pg load err: {:?}", e))?;
+    let loaded = pg
+        .load_graph_bytes("test_graph.bin")
+        .await
+        .map_err(|e| format!("pg load err: {:?}", e))?;
     assert_eq!(loaded, bytes);
 
     Ok(())

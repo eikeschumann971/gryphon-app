@@ -1,4 +1,4 @@
-use crate::common::{EventStore, EventEnvelope};
+use crate::common::{EventEnvelope, EventStore};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use std::collections::HashMap;
@@ -27,9 +27,11 @@ impl EventStore for InMemoryEventStore {
         events: Vec<EventEnvelope>,
     ) -> Result<(), String> {
         let mut store = self.events.write().await;
-        
-        let aggregate_events = store.entry(aggregate_id.to_string()).or_insert_with(Vec::new);
-        
+
+        let aggregate_events = store
+            .entry(aggregate_id.to_string())
+            .or_insert_with(Vec::new);
+
         // Check expected version
         let current_version = aggregate_events.len() as u64;
         if current_version != expected_version {
@@ -38,7 +40,7 @@ impl EventStore for InMemoryEventStore {
                 expected_version, current_version
             ));
         }
-        
+
         aggregate_events.extend(events);
         Ok(())
     }
@@ -49,13 +51,10 @@ impl EventStore for InMemoryEventStore {
         from_version: u64,
     ) -> Result<Vec<EventEnvelope>, String> {
         let store = self.events.read().await;
-        
+
         if let Some(events) = store.get(aggregate_id) {
-            let filtered_events: Vec<EventEnvelope> = events
-                .iter()
-                .skip(from_version as usize)
-                .cloned()
-                .collect();
+            let filtered_events: Vec<EventEnvelope> =
+                events.iter().skip(from_version as usize).cloned().collect();
             Ok(filtered_events)
         } else {
             Ok(Vec::new())
@@ -68,9 +67,9 @@ impl EventStore for InMemoryEventStore {
         from_timestamp: Option<DateTime<Utc>>,
     ) -> Result<Vec<EventEnvelope>, String> {
         let store = self.events.read().await;
-        
+
         let mut filtered_events = Vec::new();
-        
+
         for events in store.values() {
             for event in events {
                 if event.event_type == event_type {
@@ -84,10 +83,10 @@ impl EventStore for InMemoryEventStore {
                 }
             }
         }
-        
+
         // Sort by timestamp
         filtered_events.sort_by(|a, b| a.occurred_at.cmp(&b.occurred_at));
-        
+
         Ok(filtered_events)
     }
 }

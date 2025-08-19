@@ -1,7 +1,7 @@
 use gryphon_app::adapters::outbound::path_planning_data::FilesystemDataSource;
 use gryphon_app::PathPlanningDataSource;
-use tempfile::tempdir;
 use std::fs;
+use tempfile::tempdir;
 
 #[test]
 fn test_filesystem_datasource_save_and_load() {
@@ -15,7 +15,7 @@ fn test_filesystem_datasource_save_and_load() {
     fs::create_dir_all(&geo_dir).unwrap();
     let mut geo_file = geo_dir.clone();
     geo_file.push("sample.geojson");
-        fs::write(&geo_file, r#"{
+    fs::write(&geo_file, r#"{
     "type": "FeatureCollection",
     "features": [
         { "type": "Feature", "properties": {"name": "A"}, "geometry": { "type": "Point", "coordinates": [0.0, 0.0] } },

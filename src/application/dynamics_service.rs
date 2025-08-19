@@ -11,7 +11,11 @@ impl DynamicsService {
         Self { command_actor }
     }
 
-    pub async fn create_simulator(&self, simulator_id: String, physics_model: PhysicsModel) -> ApplicationResult<()> {
+    pub async fn create_simulator(
+        &self,
+        simulator_id: String,
+        physics_model: PhysicsModel,
+    ) -> ApplicationResult<()> {
         self.command_actor
             .create_simulator(simulator_id, physics_model)
             .await

@@ -1,8 +1,8 @@
-use crate::common::DomainEvent;
-use serde::{Deserialize, Serialize};
-use chrono::{DateTime, Utc};
-use uuid::Uuid;
 use super::aggregate::WindowType;
+use crate::common::DomainEvent;
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum GUIEvent {
@@ -67,7 +67,9 @@ impl DomainEvent for GUIEvent {
         }
     }
 
-    fn event_version(&self) -> u64 { 1 }
+    fn event_version(&self) -> u64 {
+        1
+    }
 
     fn occurred_at(&self) -> DateTime<Utc> {
         match self {

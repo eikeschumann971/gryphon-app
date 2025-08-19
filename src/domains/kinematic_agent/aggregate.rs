@@ -1,6 +1,6 @@
-use crate::common::{AggregateRoot, DomainResult, DomainError};
-use serde::{Deserialize, Serialize};
 use super::events::KinematicAgentEvent;
+use crate::common::{AggregateRoot, DomainError, DomainResult};
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KinematicAgent {
@@ -82,14 +82,34 @@ pub struct WorkspaceBounds {
 }
 
 impl KinematicAgent {
-    pub fn new(id: String, initial_position: Position3D, kinematics_model: KinematicsModel) -> Self {
+    pub fn new(
+        id: String,
+        initial_position: Position3D,
+        kinematics_model: KinematicsModel,
+    ) -> Self {
         let mut agent = Self {
             id: id.clone(),
             position: initial_position.clone(),
-            velocity: Velocity3D { x: 0.0, y: 0.0, z: 0.0 },
-            acceleration: Acceleration3D { x: 0.0, y: 0.0, z: 0.0 },
-            orientation: Orientation { roll: 0.0, pitch: 0.0, yaw: 0.0 },
-            angular_velocity: AngularVelocity { roll_rate: 0.0, pitch_rate: 0.0, yaw_rate: 0.0 },
+            velocity: Velocity3D {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            },
+            acceleration: Acceleration3D {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            },
+            orientation: Orientation {
+                roll: 0.0,
+                pitch: 0.0,
+                yaw: 0.0,
+            },
+            angular_velocity: AngularVelocity {
+                roll_rate: 0.0,
+                pitch_rate: 0.0,
+                yaw_rate: 0.0,
+            },
             kinematics_model: kinematics_model.clone(),
             constraints: MovementConstraints {
                 max_velocity: 10.0,
@@ -97,9 +117,12 @@ impl KinematicAgent {
                 max_angular_velocity: std::f64::consts::PI,
                 min_turning_radius: 1.0,
                 workspace_bounds: WorkspaceBounds {
-                    min_x: -100.0, max_x: 100.0,
-                    min_y: -100.0, max_y: 100.0,
-                    min_z: 0.0, max_z: 50.0,
+                    min_x: -100.0,
+                    max_x: 100.0,
+                    min_y: -100.0,
+                    max_y: 100.0,
+                    min_z: 0.0,
+                    max_z: 50.0,
                 },
             },
             version: 0,
@@ -112,7 +135,7 @@ impl KinematicAgent {
             kinematics_model,
             timestamp: chrono::Utc::now(),
         };
-        
+
         agent.add_event(event);
         agent
     }
@@ -138,9 +161,12 @@ impl KinematicAgent {
 
     fn is_position_valid(&self, position: &Position3D) -> bool {
         let bounds = &self.constraints.workspace_bounds;
-        position.x >= bounds.min_x && position.x <= bounds.max_x &&
-        position.y >= bounds.min_y && position.y <= bounds.max_y &&
-        position.z >= bounds.min_z && position.z <= bounds.max_z
+        position.x >= bounds.min_x
+            && position.x <= bounds.max_x
+            && position.y >= bounds.min_y
+            && position.y <= bounds.max_y
+            && position.z >= bounds.min_z
+            && position.z <= bounds.max_z
     }
 }
 
@@ -157,7 +183,12 @@ impl AggregateRoot for KinematicAgent {
 
     fn apply(&mut self, event: &Self::Event) -> DomainResult<()> {
         match event {
-            KinematicAgentEvent::AgentCreated { agent_id, initial_position, kinematics_model, .. } => {
+            KinematicAgentEvent::AgentCreated {
+                agent_id,
+                initial_position,
+                kinematics_model,
+                ..
+            } => {
                 self.id = agent_id.clone();
                 self.position = initial_position.clone();
                 self.kinematics_model = kinematics_model.clone();

@@ -1,19 +1,18 @@
-use gryphon_app::config::Config;
-use std::sync::Arc;
+// Minimal binary wrapper – configuration and Arc are used inside library
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    println!("🚀 Starting Path Planning Client (Event-Driven)");
     tracing_subscriber::fmt::init();
 
     // Compose a domain logger (file with console fallback)
-    let logger: gryphon_app::domains::DynLogger = match gryphon_app::adapters::outbound::file_logger::init_file_logger("./domain.log") {
-        Ok(l) => l,
-        Err(e) => {
-            eprintln!("Failed to initialize file logger: {}", e);
-            gryphon_app::adapters::outbound::init_console_logger()
-        }
-    };
+    let logger: gryphon_app::domains::DynLogger =
+        match gryphon_app::adapters::outbound::file_logger::init_file_logger("./domain.log") {
+            Ok(l) => l,
+            Err(e) => {
+                eprintln!("Failed to initialize file logger: {}", e);
+                gryphon_app::adapters::outbound::init_console_logger()
+            }
+        };
 
     logger.info("Starting Path Planning Client (Event-Driven)");
 

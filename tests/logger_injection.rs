@@ -6,13 +6,23 @@ struct BridgeCapture {
 }
 
 impl BridgeCapture {
-    fn new() -> Self { Self { messages: Arc::new(Mutex::new(Vec::new())) } }
+    fn new() -> Self {
+        Self {
+            messages: Arc::new(Mutex::new(Vec::new())),
+        }
+    }
 }
 
 impl gryphon_app::domains::logger::DomainLogger for BridgeCapture {
-    fn info(&self, msg: &str) { self.messages.lock().unwrap().push(format!("INFO:{}", msg)); }
-    fn warn(&self, msg: &str) { self.messages.lock().unwrap().push(format!("WARN:{}", msg)); }
-    fn error(&self, msg: &str) { self.messages.lock().unwrap().push(format!("ERR:{}", msg)); }
+    fn info(&self, msg: &str) {
+        self.messages.lock().unwrap().push(format!("INFO:{}", msg));
+    }
+    fn warn(&self, msg: &str) {
+        self.messages.lock().unwrap().push(format!("WARN:{}", msg));
+    }
+    fn error(&self, msg: &str) {
+        self.messages.lock().unwrap().push(format!("ERR:{}", msg));
+    }
 }
 
 #[tokio::test]

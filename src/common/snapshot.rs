@@ -1,6 +1,6 @@
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-use chrono::{DateTime, Utc};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Snapshot {
@@ -33,16 +33,13 @@ impl Snapshot {
 #[async_trait::async_trait]
 pub trait SnapshotStore {
     async fn save_snapshot(&self, snapshot: Snapshot) -> Result<(), String>;
-    
+
     async fn load_snapshot(
         &self,
         aggregate_id: &str,
         max_version: Option<u64>,
     ) -> Result<Option<Snapshot>, String>;
-    
-    async fn delete_snapshots_before(
-        &self,
-        aggregate_id: &str,
-        version: u64,
-    ) -> Result<(), String>;
+
+    async fn delete_snapshots_before(&self, aggregate_id: &str, version: u64)
+        -> Result<(), String>;
 }

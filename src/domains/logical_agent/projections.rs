@@ -1,9 +1,9 @@
-use serde::{Deserialize, Serialize};
-use uuid::Uuid;
-use chrono::{DateTime, Utc};
-use std::collections::HashMap;
-use super::events::LogicalAgentEvent;
 use super::aggregate::{AgentStatus, ObjectiveStatus};
+use super::events::LogicalAgentEvent;
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use uuid::Uuid;
 
 /// Projection for logical agent overview
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -36,7 +36,9 @@ impl LogicalAgentOverview {
 
     pub fn apply_event(&mut self, event: &LogicalAgentEvent) {
         match event {
-            LogicalAgentEvent::AgentCreated { name, timestamp, .. } => {
+            LogicalAgentEvent::AgentCreated {
+                name, timestamp, ..
+            } => {
                 self.name = name.clone();
                 self.created_at = *timestamp;
                 self.last_activity = *timestamp;
@@ -49,7 +51,11 @@ impl LogicalAgentOverview {
                 self.completed_objectives += 1;
                 self.last_activity = *timestamp;
             }
-            LogicalAgentEvent::StatusChanged { new_status, timestamp, .. } => {
+            LogicalAgentEvent::StatusChanged {
+                new_status,
+                timestamp,
+                ..
+            } => {
                 self.status = new_status.clone();
                 self.last_activity = *timestamp;
             }
@@ -108,13 +114,22 @@ impl ObjectiveProjection {
 
     pub fn apply_event(&mut self, event: &LogicalAgentEvent) {
         match event {
-            LogicalAgentEvent::ObjectiveCompleted { objective_id, timestamp, .. } => {
+            LogicalAgentEvent::ObjectiveCompleted {
+                objective_id,
+                timestamp,
+                ..
+            } => {
                 if *objective_id == self.objective_id {
                     self.status = ObjectiveStatus::Completed;
                     self.completed_at = Some(*timestamp);
                 }
             }
-            LogicalAgentEvent::ObjectiveFailed { objective_id, reason, timestamp, .. } => {
+            LogicalAgentEvent::ObjectiveFailed {
+                objective_id,
+                reason,
+                timestamp,
+                ..
+            } => {
                 if *objective_id == self.objective_id {
                     self.status = ObjectiveStatus::Failed(reason.clone());
                     self.completed_at = Some(*timestamp);
@@ -150,14 +165,20 @@ impl KnowledgeBaseAnalytics {
 
     pub fn apply_event(&mut self, event: &LogicalAgentEvent) {
         match event {
-            LogicalAgentEvent::FactAdded { source, confidence, timestamp, .. } => {
+            LogicalAgentEvent::FactAdded {
+                source,
+                confidence,
+                timestamp,
+                ..
+            } => {
                 self.total_facts += 1;
                 *self.facts_by_source.entry(source.clone()).or_insert(0) += 1;
-                
+
                 // Simple running average calculation
-                self.average_confidence = 
-                    (self.average_confidence * (self.total_facts - 1) as f64 + confidence) / self.total_facts as f64;
-                
+                self.average_confidence = (self.average_confidence * (self.total_facts - 1) as f64
+                    + confidence)
+                    / self.total_facts as f64;
+
                 self.last_updated = *timestamp;
             }
             LogicalAgentEvent::RuleAdded { timestamp, .. } => {
