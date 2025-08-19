@@ -5,6 +5,7 @@ use rand::Rng;
 use std::time::Duration;
 use tokio::time::sleep;
 
+#[allow(dead_code)]
 pub async fn simulate_receive_work() -> Option<PathPlanRequest> {
     let mut rng = rand::thread_rng();
     if rng.gen_bool(0.7) {
@@ -28,6 +29,7 @@ pub async fn simulate_receive_work() -> Option<PathPlanRequest> {
     }
 }
 
+#[allow(dead_code)]
 pub async fn simulate_send_result(worker_id: &str, request_id: &str, waypoints: Vec<Position2D>) {
     println!("📤 Worker {} sending results for request {}", worker_id, request_id);
     println!("   📍 Waypoints:");

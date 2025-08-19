@@ -3,6 +3,7 @@ use tokio::time::{sleep, Duration};
 use uuid::Uuid;
 use chrono::Utc;
 use rand::Rng;
+use std::f64::consts::{PI, TAU};
 
 /// Path Planning Client Process
 /// 
@@ -54,7 +55,7 @@ impl PathPlanClient {
                 agent_id: "agv-007".to_string(),
                 start_position: Position2D { x: -80.0, y: 60.0 },
                 destination_position: Position2D { x: 30.0, y: -40.0 },
-                start_orientation: Orientation2D { angle: 3.14 }, // 180 degrees
+                start_orientation: Orientation2D { angle: PI }, // 180 degrees
                 destination_orientation: Orientation2D { angle: 0.0 },
             },
             PlanningScenario {
@@ -155,8 +156,8 @@ impl PathPlanClient {
                 agent_id: format!("{}-rand", base_scenario.agent_id),
                 start_position: Position2D { x: start_x, y: start_y },
                 destination_position: Position2D { x: dest_x, y: dest_y },
-                start_orientation: Orientation2D { angle: rng.gen_range(0.0..6.28) },
-                destination_orientation: Orientation2D { angle: rng.gen_range(0.0..6.28) },
+                start_orientation: Orientation2D { angle: rng.gen_range(0.0..TAU) },
+                destination_orientation: Orientation2D { angle: rng.gen_range(0.0..TAU) },
             };
             
             let request = self.create_request_from_scenario(&random_scenario).await;
