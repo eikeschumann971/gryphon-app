@@ -1,0 +1,40 @@
+@startuml
+title Logger injection flow (binary -> adapter -> inject DynLogger)
+skinparam handwritten true
+
+actor Binary as "Application Binary (e.g. pathplan_planner)"
+participant Factory as "Logger Adapter Factory\n(init_combined_logger / init_file_logger)"
+participant Dyn as "DynLogger\n(Arc<dyn DomainLogger>)"
+participant Service as "PathPlanningService (service)"
+participant Worker as "PathPlanWorker (worker)"
+
+Binary -> Factory: init_combined_logger("./domain.log")
+activate Factory
+Factory -> Dyn: create adapter (FileLogger + Console fallback)
+activate Dyn
+Factory --> Binary: return DynLogger
+deactivate Factory
+
+Binary -> Service: Service::new(dyn_logger.clone())
+activate Service
+Binary -> Worker: Worker::new(..., dyn_logger.clone())
+activate Worker
+
+note right of Service
+  - Service holds DynLogger and calls logger.info/warn/error
+  - No global logger registry in domain; logger is injected
+end note
+
+note right of Worker
+  - Worker also receives the injected DynLogger
+  - Uses it for structured domain logs alongside any human-facing println!
+end note
+
+Service -> Dyn: logger.info("Starting Path Planning Service")
+Worker -> Dyn: logger.info("Starting Path Planning Worker")
+
+deactivate Service
+deactivate Worker
+deactivate Dyn
+
+@enduml

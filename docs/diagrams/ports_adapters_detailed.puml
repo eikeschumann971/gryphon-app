@@ -14,6 +14,7 @@ package "Domain (Ports & Aggregates)" {
   interface "GraphStoreAsync (ports/domains/path_planning)" as GraphStorePort
   interface "PathPlanningDataSource (ports)" as DataSourcePort
   interface "EventStore (common)" as EventStorePort
+  interface "DomainLogger (DynLogger)" as LoggerPort
   component "PathPlanner (aggregate)" as PathPlannerAgg
 }
 
@@ -21,6 +22,8 @@ package "Outbound Adapters" {
   component "FilesystemDataSource" as FS <<adapter>>
   component "PostgresGraphStore" as PG <<adapter>>
   component "KafkaAdapter" as KAFKA <<adapter>>
+  component "FileLogger" as FILELOG <<adapter>>
+  component "ConsoleLogger" as CONSLOG <<adapter>>
 }
 
 package "Infrastructure" {
@@ -33,11 +36,14 @@ package "Infrastructure" {
 PathPlanningService ..> GraphStorePort : uses
 PathPlanningService ..> DataSourcePort : loads maps
 PathPlanningService ..> EventStorePort : records events
+PathPlanningService ..> LoggerPort : domain logging
 
 ' Adapter realizations
 FS ..|> DataSourcePort
 PG ..|> GraphStorePort
 KAFKA ..|> EventStorePort
+FILELOG ..|> LoggerPort
+CONSLOG ..|> LoggerPort
 
 ' Infra wiring
 PG --> DB : stores graph bytes (table: graphs)
@@ -49,6 +55,7 @@ note right of PathPlanningService
   - src/application/path_planning_service.rs
   - src/adapters/outbound/path_planning_data.rs
   - src/adapters/outbound/postgres_graph_store.rs
+  - domain logger: src/domains/logger.rs (DynLogger port) and adapters under src/adapters/outbound/
 end note
 
 note bottom of PG

@@ -12,6 +12,10 @@ participant GraphStore as "GraphStore (Postgres / Filesystem)"
 participant EventStore as "EventStore"
 
 User -> GUI: Request route (start, destination)
+note left of API
+	Binaries initialize and inject a DomainLogger (DynLogger) at startup.
+	Services and Workers use the injected logger for structured domain logs.
+end note
 GUI -> API: POST /route {start, destination}
 API -> Service: validate + create request
 Service -> CommandActor: create_plan_request(command)

@@ -67,9 +67,9 @@ cargo run --bin pathplan_planner
 
 ### 3. PathPlan Worker (`pathplan_worker`)
 
-**Purpose**: (To be updated) Will consume `PlanAssigned` events and publish completion events.
+**Purpose**: Consumes `PlanAssigned` events and publishes completion events.
 
-**Note**: The worker needs to be updated to use the event-driven architecture.
+**Note**: The current worker implementation lives in `src/bin/pathplan_worker/worker.rs` and accepts an injected domain logger (`DynLogger`) — there is no longer a `worker_new.rs` file. The worker consumes `PlanAssigned` events from the event store and publishes `PlanCompleted`/`PlanFailed` events.
 
 ## Event Flow
 

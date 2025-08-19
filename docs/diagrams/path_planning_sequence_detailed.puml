@@ -13,6 +13,10 @@ participant EventStore as "EventStore"
 
 User -> GUI: click 'Plan route' (start, goal)
 GUI -> API: POST /route {start, destination, planner_id?}
+note left of API
+  The binary initializes an outbound logger adapter (e.g. FileLogger + Console fallback)
+  and injects it as `DynLogger` into application services and workers.
+end note
 API -> Service: validate inputs, auth
 activate Service
 Service -> CommandActor: create_plan_request(command)
