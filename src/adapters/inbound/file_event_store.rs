@@ -45,7 +45,7 @@ impl EventStore for FileEventStore {
     async fn append_events(
         &self,
         aggregate_id: &str,
-        expected_version: u64,
+        _expected_version: u64,
         events: Vec<EventEnvelope>,
     ) -> Result<(), String> {
         self.ensure_base_dir().await?;

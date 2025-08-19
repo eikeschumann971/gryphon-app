@@ -6,8 +6,8 @@ use std::collections::HashMap;
 use uuid::Uuid;
 use chrono::Utc;
 use std::sync::Arc;
-use rdkafka::consumer::{StreamConsumer, Consumer};
-use rdkafka::{ClientConfig, Message};
+use rdkafka::consumer::Consumer;
+use rdkafka::Message;
 
 #[derive(Debug, Clone)]
 pub struct WorkerInfo {
@@ -27,6 +27,7 @@ pub enum WorkerStatus {
 pub struct PathPlanningPlannerService {
     planners: HashMap<String, PathPlanner>,
     event_store: Arc<dyn EventStore>,
+    #[allow(dead_code)]
     last_processed_version: HashMap<String, u64>,
     available_workers: HashMap<String, WorkerInfo>,
 }
@@ -239,7 +240,7 @@ impl PathPlanningPlannerService {
             PathPlanningEvent::WorkerHeartbeat { worker_id, timestamp, .. } => {
                 // Update last heartbeat timestamp
                 if let Some(worker_info) = self.available_workers.get_mut(&worker_id) {
-                    worker_info.last_heartbeat = timestamp.clone();
+                    worker_info.last_heartbeat = timestamp;
                     println!("💓 Received heartbeat from worker {} at {}", worker_id, timestamp.format("%H:%M:%S"));
                 } else {
                     println!("⚠️ Received heartbeat from unknown worker: {}", worker_id);
@@ -286,6 +287,7 @@ impl PathPlanningPlannerService {
         None
     }
     
+    #[allow(clippy::too_many_arguments)]
     async fn assign_plan_to_worker(
         &self,
         plan_id: &str,

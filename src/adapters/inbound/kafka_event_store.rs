@@ -4,11 +4,9 @@ use chrono::{DateTime, Utc};
 use rdkafka::config::ClientConfig;
 use rdkafka::producer::{FutureProducer, FutureRecord};
 use rdkafka::consumer::{Consumer, StreamConsumer};
-use rdkafka::{Message, TopicPartitionList};
+use rdkafka::Message;
 use serde_json;
 use std::time::Duration;
-use std::collections::HashMap;
-use uuid::Uuid;
 
 /// Kafka-based EventStore implementation for distributed event-driven architecture
 /// 

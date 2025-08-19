@@ -97,7 +97,7 @@ pub enum PlanResponseStatus {
 impl PathPlannerService {
     pub async fn new() -> Result<Self, Box<dyn std::error::Error>> {
         // For demo purposes, use default config and in-memory event store
-        let config = Config::default();
+        let _config = Config::default();
         println!("📋 Using default configuration for demo");
 
         // Initialize event store - use file-based store for demo so all processes can share events
@@ -284,7 +284,7 @@ impl PathPlannerService {
                 
                 let worker_info = WorkerInfo {
                     worker_id: worker_id.clone(),
-                    capabilities: capabilities,
+                    capabilities,
                     status: WorkerStatus::Ready,
                     last_heartbeat: Utc::now(),
                 };
@@ -336,6 +336,7 @@ impl PathPlannerService {
         None
     }
     
+    #[allow(clippy::too_many_arguments)]
     async fn assign_plan_to_worker(
         &self, 
         plan_id: &str, 

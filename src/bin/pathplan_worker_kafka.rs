@@ -6,7 +6,6 @@ use chrono::Utc;
 use std::sync::Arc;
 use rdkafka::consumer::{StreamConsumer, Consumer};
 use rdkafka::{ClientConfig, Message};
-use uuid::Uuid;
 
 #[derive(Debug, Clone)]
 pub struct KafkaPathPlanWorker {
@@ -41,7 +40,7 @@ impl KafkaPathPlanWorker {
         
         // Create dedicated consumer for receiving PlanAssigned events with unique group ID
         let consumer: StreamConsumer = ClientConfig::new()
-            .set("group.id", &format!("worker-group-{}", self.worker_id))
+            .set("group.id", format!("worker-group-{}", self.worker_id))
             .set("bootstrap.servers", "localhost:9092")
             .set("enable.partition.eof", "false")
             .set("session.timeout.ms", "6000")
@@ -73,64 +72,62 @@ impl KafkaPathPlanWorker {
                                     
                                     // Only process PlanAssigned events for this worker
                                     if event.event_type == "PlanAssigned" {
-                                        if let Ok(event_data) = serde_json::from_value::<PathPlanningEvent>(event.event_data.clone()) {
-                                            if let PathPlanningEvent::PlanAssigned { 
-                                                plan_id, 
-                                                worker_id,
-                                                start_position, 
-                                                destination_position, 
-                                                .. 
-                                            } = event_data {
-                                                // Check if this assignment is for this worker and not already processed
-                                                if worker_id == self.worker_id && !processed_plans.contains(&plan_id) {
-                                                    processed_plans.insert(plan_id.clone());
-                                                    println!("🔧 Processing plan assignment from Kafka: {}", plan_id);
-                                                    
-                                                    // Simulate path planning work
-                                                    println!("   📊 Calculating optimal path using A* algorithm...");
-                                                    tokio::time::sleep(Duration::from_millis(500)).await;
-                                                    
-                                                    // Generate a simple path (for demo)
-                                                    let mut waypoints = Vec::new();
-                                                    let steps = 4;
-                                                    for i in 0..=steps {
-                                                        let t = i as f64 / steps as f64;
-                                                        let x = start_position.x + t * (destination_position.x - start_position.x);
-                                                        let y = start_position.y + t * (destination_position.y - start_position.y);
-                                                        waypoints.push(Position2D { x, y });
-                                                    }
-                                                    
-                                                    println!("   ✅ Path calculated with {} waypoints", waypoints.len());
-                                                    
-                                                    // Create PlanCompleted event
-                                                    let completion_event = PathPlanningEvent::PlanCompleted {
-                                                        planner_id: self.planner_id.clone(),
-                                                        plan_id: plan_id.clone(),
-                                                        worker_id: Some(self.worker_id.clone()),
-                                                        waypoints,
-                                                        timestamp: Utc::now(),
-                                                    };
-                                                    
-                                                    let metadata = EventMetadata {
-                                                        correlation_id: None,
-                                                        causation_id: Some(event.event_id),
-                                                        user_id: None,
-                                                        source: "pathplan_worker_kafka".to_string(),
-                                                    };
-                                                    
-                                                    let completion_envelope = EventEnvelope::new(
-                                                        &completion_event, 
-                                                        "PathPlan", 
-                                                        metadata
-                                                    )?;
-                                                    
-                                                    // Publish completion to Kafka
-                                                    event_store.append_events(&plan_id, 1, vec![completion_envelope]).await?;
-                                                    println!("   📤 Published PlanCompleted event to Kafka");
-                                                    println!("✅ Plan {} completed and published to Kafka successfully", plan_id);
-                                                } else if worker_id != self.worker_id {
-                                                    println!("🔄 Ignoring assignment for different worker: {} (this worker: {})", worker_id, self.worker_id);
+                                        if let Ok(PathPlanningEvent::PlanAssigned { 
+                                            plan_id, 
+                                            worker_id,
+                                            start_position, 
+                                            destination_position, 
+                                            .. 
+                                        }) = serde_json::from_value::<PathPlanningEvent>(event.event_data.clone()) {
+                                            // Check if this assignment is for this worker and not already processed
+                                            if worker_id == self.worker_id && !processed_plans.contains(&plan_id) {
+                                                processed_plans.insert(plan_id.clone());
+                                                println!("🔧 Processing plan assignment from Kafka: {}", plan_id);
+                                                
+                                                // Simulate path planning work
+                                                println!("   📊 Calculating optimal path using A* algorithm...");
+                                                tokio::time::sleep(Duration::from_millis(500)).await;
+                                                
+                                                // Generate a simple path (for demo)
+                                                let mut waypoints = Vec::new();
+                                                let steps = 4;
+                                                for i in 0..=steps {
+                                                    let t = i as f64 / steps as f64;
+                                                    let x = start_position.x + t * (destination_position.x - start_position.x);
+                                                    let y = start_position.y + t * (destination_position.y - start_position.y);
+                                                    waypoints.push(Position2D { x, y });
                                                 }
+                                                
+                                                println!("   ✅ Path calculated with {} waypoints", waypoints.len());
+                                                
+                                                // Create PlanCompleted event
+                                                let completion_event = PathPlanningEvent::PlanCompleted {
+                                                    planner_id: self.planner_id.clone(),
+                                                    plan_id: plan_id.clone(),
+                                                    worker_id: Some(self.worker_id.clone()),
+                                                    waypoints,
+                                                    timestamp: Utc::now(),
+                                                };
+                                                
+                                                let metadata = EventMetadata {
+                                                    correlation_id: None,
+                                                    causation_id: Some(event.event_id),
+                                                    user_id: None,
+                                                    source: "pathplan_worker_kafka".to_string(),
+                                                };
+                                                
+                                                let completion_envelope = EventEnvelope::new(
+                                                    &completion_event, 
+                                                    "PathPlan", 
+                                                    metadata
+                                                )?;
+                                                
+                                                // Publish completion to Kafka
+                                                event_store.append_events(&plan_id, 1, vec![completion_envelope]).await?;
+                                                println!("   📤 Published PlanCompleted event to Kafka");
+                                                println!("✅ Plan {} completed and published to Kafka successfully", plan_id);
+                                            } else if worker_id != self.worker_id {
+                                                println!("🔄 Ignoring assignment for different worker: {} (this worker: {})", worker_id, self.worker_id);
                                             }
                                         }
                                     }

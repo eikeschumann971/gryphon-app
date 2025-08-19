@@ -1,7 +1,9 @@
+#[allow(unused_imports)]
 use crate::planning::plan_path_astar;
 use gryphon_app::domains::path_planning::*;
 use gryphon_app::adapters::inbound::file_event_store::FileEventStore;
 use gryphon_app::common::{EventStore, EventEnvelope, EventMetadata};
+#[allow(unused_imports)]
 use uuid::Uuid;
 use std::time::Duration;
 use tokio::time::sleep;
@@ -12,6 +14,7 @@ use std::sync::Arc;
 pub struct AStarPathPlanWorker {
     pub worker_id: String,
     pub planner_id: String,
+    #[allow(dead_code)]
     pub capabilities: Vec<PlanningAlgorithm>,
 }
 
@@ -67,19 +70,15 @@ impl AStarPathPlanWorker {
                             println!("  📊 Found {} completion events", completion_events.len());
                             
                             let already_completed = completion_events.iter().any(|completion_event| {
-                                if let Ok(completion_data) = serde_json::from_value::<PathPlanningEvent>(completion_event.event_data.clone()) {
-                                    if let PathPlanningEvent::PlanCompleted { 
-                                        plan_id: completed_plan_id, 
-                                        .. 
-                                    } = completion_data {
-                                        let is_match = completed_plan_id == plan_id;
-                                        if is_match {
-                                            println!("    ✅ Found completion for plan: {}", completed_plan_id);
-                                        }
-                                        is_match
-                                    } else {
-                                        false
+                                if let Ok(PathPlanningEvent::PlanCompleted { 
+                                    plan_id: completed_plan_id, 
+                                    .. 
+                                }) = serde_json::from_value::<PathPlanningEvent>(completion_event.event_data.clone()) {
+                                    let is_match = completed_plan_id == plan_id;
+                                    if is_match {
+                                        println!("    ✅ Found completion for plan: {}", completed_plan_id);
                                     }
+                                    is_match
                                 } else {
                                     false
                                 }

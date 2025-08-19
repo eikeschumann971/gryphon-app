@@ -92,34 +92,30 @@ async fn run_kafka_client() -> Result<(), Box<dyn std::error::Error>> {
         if !assigned_found {
             let assigned_events = event_store.load_events_by_type("PlanAssigned", None).await?;
             for event in assigned_events {
-                if let Ok(event_data) = serde_json::from_value::<PathPlanningEvent>(event.event_data) {
-                    if let PathPlanningEvent::PlanAssigned { plan_id: assigned_plan_id, worker_id, .. } = event_data {
-                        if assigned_plan_id == plan_id {
-                            println!("   🎉 Event received from Kafka: PlanAssigned to worker {}", worker_id);
-                            assigned_found = true;
-                        }
+                if let Ok(PathPlanningEvent::PlanAssigned { plan_id: assigned_plan_id, worker_id, .. }) = serde_json::from_value::<PathPlanningEvent>(event.event_data) {
+                    if assigned_plan_id == plan_id {
+                        println!("   🎉 Event received from Kafka: PlanAssigned to worker {}", worker_id);
+                        assigned_found = true;
                     }
                 }
             }
         }
         
-        // Check for PlanCompleted events
+        // Check for PlanCompleted events  
         if !completed_found {
             let completed_events = event_store.load_events_by_type("PlanCompleted", None).await?;
             for event in completed_events {
-                if let Ok(event_data) = serde_json::from_value::<PathPlanningEvent>(event.event_data) {
-                    if let PathPlanningEvent::PlanCompleted { plan_id: completed_plan_id, waypoints, worker_id, .. } = event_data {
-                        if completed_plan_id == plan_id {
-                            println!("   ✅ Event received from Kafka: PlanCompleted with {} waypoints by worker {:?}!", waypoints.len(), worker_id);
-                            println!("   📍 Sample waypoints from completed plan:");
-                            for (idx, waypoint) in waypoints.iter().take(3).enumerate() {
-                                println!("      {}. ({:.1}, {:.1})", idx + 1, waypoint.x, waypoint.y);
-                            }
-                            if waypoints.len() > 3 {
-                                println!("      ... and {} more waypoints", waypoints.len() - 3);
-                            }
-                            completed_found = true;
+                if let Ok(PathPlanningEvent::PlanCompleted { plan_id: completed_plan_id, waypoints, worker_id, .. }) = serde_json::from_value::<PathPlanningEvent>(event.event_data) {
+                    if completed_plan_id == plan_id {
+                        println!("   ✅ Event received from Kafka: PlanCompleted with {} waypoints by worker {:?}!", waypoints.len(), worker_id);
+                        println!("   📍 Sample waypoints from completed plan:");
+                        for (idx, waypoint) in waypoints.iter().take(3).enumerate() {
+                            println!("      {}. ({:.1}, {:.1})", idx + 1, waypoint.x, waypoint.y);
                         }
+                        if waypoints.len() > 3 {
+                            println!("      ... and {} more waypoints", waypoints.len() - 3);
+                        }
+                        completed_found = true;
                     }
                 }
             }
