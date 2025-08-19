@@ -18,14 +18,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("🚀 Starting Path Planning Client (Event-Driven)");
     // Initialize tracing
     tracing_subscriber::fmt::init();
-    // Initialize domain file logger (hexagonal adapter)
-    if let Err(e) = gryphon_app::adapters::outbound::file_logger::init_file_logger("./domain.log") {
-        eprintln!("Failed to initialize file logger: {}", e);
-    } else {
-        gryphon_app::domains::logger::info("Starting Path Planning Client (Event-Driven)");
-    }
-    
-    let client = PathPlanClient::new().await?;
+    // Initialize domain file logger (hexagonal adapter) and capture injected logger
+    let logger: gryphon_app::domains::DynLogger = match gryphon_app::adapters::outbound::file_logger::init_file_logger("./domain.log") {
+        Ok(l) => l,
+        Err(e) => {
+            eprintln!("Failed to initialize file logger: {}", e);
+            // Fallback logger that prints to stdout/stderr so the app keeps running
+            struct ConsoleLogger;
+            impl gryphon_app::domains::logger::DomainLogger for ConsoleLogger {
+                fn info(&self, msg: &str) { println!("{}", msg); }
+                fn warn(&self, msg: &str) { println!("WARN: {}", msg); }
+                fn error(&self, msg: &str) { eprintln!("ERROR: {}", msg); }
+            }
+            std::sync::Arc::new(ConsoleLogger {})
+        }
+    };
+
+    logger.info("Starting Path Planning Client (Event-Driven)");
+
+    let client = PathPlanClient::new(logger.clone()).await?;
     client.run().await?;
     
     Ok(())
@@ -35,6 +46,7 @@ pub struct PathPlanClient {
     scenarios: Vec<PlanningScenario>,
     event_store: Arc<dyn EventStore>,
     planner_id: String,
+    logger: gryphon_app::domains::DynLogger,
 }
 
 #[derive(Debug, Clone)]
@@ -49,16 +61,16 @@ pub struct PlanningScenario {
 }
 
 impl PathPlanClient {
-    pub async fn new() -> Result<Self, Box<dyn std::error::Error>> {
+    pub async fn new(logger: gryphon_app::domains::DynLogger) -> Result<Self, Box<dyn std::error::Error>> {
         // For demo purposes, use default config and in-memory event store
         let _config = Config::default();
     println!("📋 Using default configuration for demo");
-    gryphon_app::domains::logger::info("Using default configuration for demo");
+    logger.info("Using default configuration for demo");
 
         // Initialize event store - use file-based store for demo so all processes can share events
         let event_store: Arc<dyn EventStore> = Arc::new(FileEventStore::new("/tmp/gryphon-events"));
     println!("✅ Using file-based event store for demo (shared between processes)");
-    gryphon_app::domains::logger::info("Using file-based event store for demo (shared between processes)");
+    logger.info("Using file-based event store for demo (shared between processes)");
 
         let planner_id = "main-path-planner".to_string();
         
@@ -114,14 +126,15 @@ impl PathPlanClient {
             scenarios,
             event_store,
             planner_id,
+            logger,
         })
     }
     
     pub async fn run(&self) -> Result<(), Box<dyn std::error::Error>> {
     println!("🎯 Path Planning Client is running");
-    gryphon_app::domains::logger::info("Path Planning Client is running");
+    self.logger.info("Path Planning Client is running");
     println!("🔄 Will send {} different planning scenarios", self.scenarios.len());
-    gryphon_app::domains::logger::info(&format!("Will send {} different planning scenarios", self.scenarios.len()));
+    self.logger.info(&format!("Will send {} different planning scenarios", self.scenarios.len()));
         
         // Demo mode: send all scenarios with delays
         self.run_demo_mode().await?;
@@ -134,13 +147,13 @@ impl PathPlanClient {
     
     async fn run_demo_mode(&self) -> Result<(), Box<dyn std::error::Error>> {
     println!("\n🎬 Starting demo mode - sending predefined scenarios");
-    gryphon_app::domains::logger::info("Starting demo mode - sending predefined scenarios");
+        self.logger.info("Starting demo mode - sending predefined scenarios");
         
         for (i, scenario) in self.scenarios.iter().enumerate() {
             println!("\n📋 Scenario {} of {}: {}", i + 1, self.scenarios.len(), scenario.name);
-            gryphon_app::domains::logger::info(&format!("Scenario {} of {}: {}", i + 1, self.scenarios.len(), scenario.name));
+            self.logger.info(&format!("Scenario {} of {}: {}", i + 1, self.scenarios.len(), scenario.name));
             println!("   📝 {}", scenario.description);
-            gryphon_app::domains::logger::info(&format!("Scenario description: {}", scenario.description));
+            self.logger.info(&format!("Scenario description: {}", scenario.description));
             
             let request = self.create_request_from_scenario(scenario).await;
             self.send_path_plan_request(request).await?;
@@ -148,13 +161,13 @@ impl PathPlanClient {
             // Wait between requests to see the flow clearly
             if i < self.scenarios.len() - 1 {
                 println!("   ⏱️  Waiting 8 seconds before next scenario...");
-                gryphon_app::domains::logger::info("Waiting 8 seconds before next scenario");
+            self.logger.info("Waiting 8 seconds before next scenario");
                 sleep(Duration::from_secs(8)).await;
             }
         }
         
     println!("\n✅ All demo scenarios completed!");
-    gryphon_app::domains::logger::info("All demo scenarios completed");
+        self.logger.info("All demo scenarios completed");
         
         // Continue with random requests
         self.run_random_requests().await?;
@@ -164,12 +177,12 @@ impl PathPlanClient {
     
     async fn run_random_requests(&self) -> Result<(), Box<dyn std::error::Error>> {
     println!("\n🎲 Starting random request mode");
-    gryphon_app::domains::logger::info("Starting random request mode");
+        self.logger.info("Starting random request mode");
         let mut rng = rand::thread_rng();
         
         for i in 1..=10 {
             println!("\n🎲 Random request {} of 10", i);
-            gryphon_app::domains::logger::info(&format!("Random request {} of 10", i));
+            self.logger.info(&format!("Random request {} of 10", i));
             
             // Pick a random scenario as a base
             let base_scenario = &self.scenarios[rng.gen_range(0..self.scenarios.len())];
@@ -202,18 +215,18 @@ impl PathPlanClient {
             // Random delay between requests
             let delay = rng.gen_range(3..8);
             println!("   ⏱️  Waiting {} seconds before next request...", delay);
-            gryphon_app::domains::logger::info(&format!("Waiting {} seconds before next request", delay));
+            self.logger.info(&format!("Waiting {} seconds before next request", delay));
             sleep(Duration::from_secs(delay)).await;
         }
         
     println!("\n🎉 Random request session completed!");
-    gryphon_app::domains::logger::info("Random request session completed");
+        self.logger.info("Random request session completed");
         
         // Keep running indefinitely with periodic requests
         loop {
             sleep(Duration::from_secs(30)).await;
             println!("\n🔄 Sending periodic request...");
-            gryphon_app::domains::logger::info("Sending periodic request");
+            self.logger.info("Sending periodic request");
             
             let mut rng = rand::thread_rng();
             let base_scenario = &self.scenarios[rng.gen_range(0..self.scenarios.len())];
@@ -238,17 +251,17 @@ impl PathPlanClient {
     
     async fn send_path_plan_request(&self, request: PathPlanRequest) -> Result<(), Box<dyn std::error::Error>> {
     println!("📤 Publishing path plan request event:");
-    gryphon_app::domains::logger::info("Publishing path plan request event");
+    self.logger.info("Publishing path plan request event");
     println!("   🆔 Request ID: {}", request.request_id);
-    gryphon_app::domains::logger::info(&format!("Request ID: {}", request.request_id));
+    self.logger.info(&format!("Request ID: {}", request.request_id));
     println!("   🤖 Agent: {}", request.agent_id);
-    gryphon_app::domains::logger::info(&format!("Agent: {}", request.agent_id));
+    self.logger.info(&format!("Agent: {}", request.agent_id));
     println!("   📍 Start: ({:.1}, {:.1}) @ {:.2}rad", 
-         request.start_position.x, request.start_position.y, request.start_orientation.angle);
-    gryphon_app::domains::logger::info(&format!("Start: ({:.1}, {:.1}) @ {:.2}rad", request.start_position.x, request.start_position.y, request.start_orientation.angle));
+        request.start_position.x, request.start_position.y, request.start_orientation.angle);
+    self.logger.info(&format!("Start: ({:.1}, {:.1}) @ {:.2}rad", request.start_position.x, request.start_position.y, request.start_orientation.angle));
     println!("   🎯 Goal:  ({:.1}, {:.1}) @ {:.2}rad", 
-         request.destination_position.x, request.destination_position.y, request.destination_orientation.angle);
-    gryphon_app::domains::logger::info(&format!("Goal: ({:.1}, {:.1}) @ {:.2}rad", request.destination_position.x, request.destination_position.y, request.destination_orientation.angle));
+        request.destination_position.x, request.destination_position.y, request.destination_orientation.angle);
+    self.logger.info(&format!("Goal: ({:.1}, {:.1}) @ {:.2}rad", request.destination_position.x, request.destination_position.y, request.destination_orientation.angle));
         
         // Calculate distance for context
         let distance = ((request.destination_position.x - request.start_position.x).powi(2) + 
@@ -288,7 +301,7 @@ impl PathPlanClient {
 
         // Publish to event store
     println!("   📡 Publishing event to event store...");
-    gryphon_app::domains::logger::info("Publishing event to event store");
+    self.logger.info("Publishing event to event store");
         
         // Load current version (for this demo, we'll use 0 as we're not implementing full event sourcing)
         let current_version = 0;
@@ -300,11 +313,11 @@ impl PathPlanClient {
         ).await {
             Ok(_) => {
                 println!("   ✅ Event published successfully!");
-                gryphon_app::domains::logger::info("Event published successfully");
+                self.logger.info("Event published successfully");
                 println!("   🎯 Plan ID: {}", plan_id);
-                gryphon_app::domains::logger::info(&format!("Plan ID: {}", plan_id));
+                self.logger.info(&format!("Plan ID: {}", plan_id));
                 println!("   📝 Event: PathPlanRequested");
-                gryphon_app::domains::logger::info("Event: PathPlanRequested");
+                self.logger.info("Event: PathPlanRequested");
                 
                 // Simulate processing time
                 sleep(Duration::from_millis(100)).await;
@@ -315,7 +328,7 @@ impl PathPlanClient {
             }
             Err(e) => {
                 println!("   ❌ Failed to publish event: {}", e);
-                gryphon_app::domains::logger::error(&format!("Failed to publish event: {}", e));
+                self.logger.error(&format!("Failed to publish event: {}", e));
                 return Err(e.into());
             }
         }
@@ -326,7 +339,7 @@ impl PathPlanClient {
     async fn simulate_event_response(&self, request: &PathPlanRequest, plan_id: &str) {
         // Simulate waiting for event-driven response
     println!("   ⏳ Waiting for response events...");
-    gryphon_app::domains::logger::info("Waiting for response events");
+    self.logger.info("Waiting for response events");
         sleep(Duration::from_millis(500)).await;
         
         // Simulate different response events
@@ -337,17 +350,17 @@ impl PathPlanClient {
             1..=7 => {
                 // Success case (70% probability) - simulate PlanCompleted event
                 println!("   🎉 Event received: PlanAssigned to worker");
-                gryphon_app::domains::logger::info("Event received: PlanAssigned to worker");
+                self.logger.info("Event received: PlanAssigned to worker");
                 sleep(Duration::from_millis(200)).await;
                 println!("   🔄 Event received: Worker processing plan...");
-                gryphon_app::domains::logger::info("Event received: Worker processing plan");
+                self.logger.info("Event received: Worker processing plan");
                 sleep(Duration::from_millis(800)).await;
                 
                 let waypoint_count = rng.gen_range(3..8);
                 println!("   ✅ Event received: PlanCompleted with {} waypoints!", waypoint_count);
-                gryphon_app::domains::logger::info(&format!("Event received: PlanCompleted with {} waypoints", waypoint_count));
+                self.logger.info(&format!("Event received: PlanCompleted with {} waypoints", waypoint_count));
                 println!("   📍 Sample waypoints from completed plan:");
-                gryphon_app::domains::logger::info("Sample waypoints from completed plan");
+                self.logger.info("Sample waypoints from completed plan");
                 
                 // Generate sample waypoints
                 for i in 1..=waypoint_count.min(3) {
@@ -355,35 +368,35 @@ impl PathPlanClient {
                     let x = request.start_position.x + progress * (request.destination_position.x - request.start_position.x);
                     let y = request.start_position.y + progress * (request.destination_position.y - request.start_position.y);
                     println!("      {}. ({:.1}, {:.1})", i, x, y);
-                    gryphon_app::domains::logger::info(&format!("Waypoint {}: ({:.1}, {:.1})", i, x, y));
+                    self.logger.info(&format!("Waypoint {}: ({:.1}, {:.1})", i, x, y));
                 }
                 if waypoint_count > 3 {
                     println!("      ... and {} more waypoints", waypoint_count - 3);
-                    gryphon_app::domains::logger::info(&format!("... and {} more waypoints", waypoint_count - 3));
+                    self.logger.info(&format!("... and {} more waypoints", waypoint_count - 3));
                 }
                 
                 // In a real system, we would publish a PlanCompleted event here
                 println!("   📝 Would publish: PlanCompleted event for plan {}", plan_id);
-                gryphon_app::domains::logger::info(&format!("Would publish: PlanCompleted event for plan {}", plan_id));
+                self.logger.info(&format!("Would publish: PlanCompleted event for plan {}", plan_id));
             },
             8..=9 => {
                 // No worker available (20% probability)
                 println!("   ⏳ Event received: Plan queued, waiting for available worker...");
-                gryphon_app::domains::logger::info("Event received: Plan queued, waiting for available worker");
+                self.logger.info("Event received: Plan queued, waiting for available worker");
                 sleep(Duration::from_millis(1000)).await;
                 println!("   ⚠️  Event received: No workers currently available");
-                gryphon_app::domains::logger::warn("Event received: No workers currently available");
+                self.logger.warn("Event received: No workers currently available");
                 println!("   📝 Plan {} remains in queue", plan_id);
-                gryphon_app::domains::logger::info(&format!("Plan {} remains in queue", plan_id));
+                self.logger.info(&format!("Plan {} remains in queue", plan_id));
             },
             _ => {
                 // Validation error (10% probability)
                 println!("   ❌ Event received: PlanFailed - validation error");
-                gryphon_app::domains::logger::error("Event received: PlanFailed - validation error");
+                self.logger.error("Event received: PlanFailed - validation error");
                 println!("      Reason: Position outside workspace bounds or obstacle collision");
-                gryphon_app::domains::logger::info("Reason: Position outside workspace bounds or obstacle collision");
+                self.logger.info("Reason: Position outside workspace bounds or obstacle collision");
                 println!("   📝 Would publish: PlanFailed event for plan {}", plan_id);
-                gryphon_app::domains::logger::info(&format!("Would publish: PlanFailed event for plan {}", plan_id));
+                self.logger.info(&format!("Would publish: PlanFailed event for plan {}", plan_id));
             }
         }
     }

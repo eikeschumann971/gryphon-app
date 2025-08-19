@@ -1,10 +1,24 @@
-use crate::domains::logger::{FileLogger, set_global_logger};
+use crate::domains::logger::{FileLogger, DomainLogger};
 use std::sync::Arc;
 
-/// Convenience function the application can call at startup to install a file logger
-/// path: path to append logs to (e.g. "/var/log/gryphon/domain.log" or "./domain.log")
-pub fn init_file_logger(path: &str) -> Result<(), String> {
-    let logger = FileLogger::new(path).map_err(|e| format!("Failed to open log file: {}", e))?;
-    set_global_logger(Arc::new(logger));
-    Ok(())
+struct BridgeLogger;
+
+impl DomainLogger for BridgeLogger {
+    fn info(&self, msg: &str) {
+        log::info!("{}", msg);
+    }
+
+    fn warn(&self, msg: &str) {
+        log::warn!("{}", msg);
+    }
+
+    fn error(&self, msg: &str) {
+        log::error!("{}", msg);
+    }
+}
+
+/// Initialize the file logger and return a domain logger instance the application can inject.
+pub fn init_file_logger(path: &str) -> Result<Arc<dyn DomainLogger>, String> {
+    FileLogger::init(path).map_err(|e| format!("Failed to initialize fast_log: {}", e))?;
+    Ok(Arc::new(BridgeLogger {}))
 }

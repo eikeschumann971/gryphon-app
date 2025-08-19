@@ -1,7 +1,6 @@
-use std::sync::{Arc, Mutex};
-use std::fs::OpenOptions;
-use std::io::Write;
+use std::sync::Arc;
 use chrono::Utc;
+use log::{info as log_info, warn as log_warn, error as log_error};
 
 /// Domain-level logging port (Hexagonal port).
 /// Keep this API intentionally small and non-fallible from the domain perspective.
@@ -11,73 +10,36 @@ pub trait DomainLogger: Send + Sync + 'static {
     fn error(&self, msg: &str);
 }
 
-type DynLogger = Arc<dyn DomainLogger>;
+pub type DynLogger = Arc<dyn DomainLogger>;
 
-/// A tiny global registry used for wiring a domain logger at application startup.
-/// This keeps domain code free of direct filesystem dependencies while avoiding
-/// invasive signature changes throughout the codebase during this refactor.
-static GLOBAL_LOGGER: once_cell::sync::Lazy<Mutex<Option<DynLogger>>> =
-    once_cell::sync::Lazy::new(|| Mutex::new(None));
-
-/// Install the domain logger. Should be called from application/bootstrap code.
-pub fn set_global_logger(logger: DynLogger) {
-    let mut guard = GLOBAL_LOGGER.lock().unwrap();
-    *guard = Some(logger);
-}
-
-/// Get the installed logger (if any).
-pub fn get_global_logger() -> Option<DynLogger> {
-    GLOBAL_LOGGER.lock().unwrap().clone()
-}
-
-/// Convenience helpers used by domain code to log without taking a logger param.
-pub fn info(msg: &str) {
-    if let Some(logger) = get_global_logger() {
-        logger.info(msg);
-    }
-}
-
-pub fn warn(msg: &str) {
-    if let Some(logger) = get_global_logger() {
-        logger.warn(msg);
-    }
-}
-
-pub fn error(msg: &str) {
-    if let Some(logger) = get_global_logger() {
-        logger.error(msg);
-    }
-}
-
-/// A simple file-based adapter implementing the DomainLogger trait.
-pub struct FileLogger {
-    file: Mutex<std::fs::File>,
-}
+/// A file-based adapter using `fast_log` for file writing and rotation.
+pub struct FileLogger;
 
 impl FileLogger {
-    /// Open or create the file and append.
-    pub fn new(path: &str) -> std::io::Result<Self> {
-        let f = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(path)?;
-        Ok(Self { file: Mutex::new(f) })
+    /// Initialize the fast_log file logger.
+    /// Path is the file path used by fast_log's Rolling file appender.
+    pub fn init(path: &str) -> Result<(), Box<dyn std::error::Error>> {
+        // Configure fast_log with a rolling file appender
+        fast_log::init(
+            fast_log::config::Config::new()
+                .console()
+                .file(path)
+                .level(log::LevelFilter::Info),
+        )?;
+        Ok(())
     }
 }
 
 impl DomainLogger for FileLogger {
     fn info(&self, msg: &str) {
-        let mut f = self.file.lock().unwrap();
-        let _ = writeln!(f, "[{}] INFO  - {}", Utc::now().to_rfc3339(), msg);
+        log_info!("{} - {}", Utc::now().to_rfc3339(), msg);
     }
 
     fn warn(&self, msg: &str) {
-        let mut f = self.file.lock().unwrap();
-        let _ = writeln!(f, "[{}] WARN  - {}", Utc::now().to_rfc3339(), msg);
+        log_warn!("{} - {}", Utc::now().to_rfc3339(), msg);
     }
 
     fn error(&self, msg: &str) {
-        let mut f = self.file.lock().unwrap();
-        let _ = writeln!(f, "[{}] ERROR - {}", Utc::now().to_rfc3339(), msg);
+        log_error!("{} - {}", Utc::now().to_rfc3339(), msg);
     }
 }
