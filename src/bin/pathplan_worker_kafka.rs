@@ -6,6 +6,7 @@ use chrono::Utc;
 use std::sync::Arc;
 use rdkafka::consumer::{StreamConsumer, Consumer};
 use rdkafka::{ClientConfig, Message};
+use uuid::Uuid;
 
 #[derive(Debug, Clone)]
 pub struct KafkaPathPlanWorker {
@@ -34,6 +35,9 @@ impl KafkaPathPlanWorker {
                 &format!("worker-group-{}", self.worker_id)
             ).await?
         );
+        
+        // Register this worker with the planner via Kafka event
+        self.register_worker(&event_store).await?;
         
         // Create dedicated consumer for receiving PlanAssigned events with unique group ID
         let consumer: StreamConsumer = ClientConfig::new()
@@ -138,10 +142,67 @@ impl KafkaPathPlanWorker {
             }
         }
     }
+    
+    async fn register_worker(&self, event_store: &Arc<KafkaEventStore>) -> Result<(), Box<dyn std::error::Error>> {
+        println!("📝 Registering worker {} with planner via Kafka", self.worker_id);
+        
+        let registration_event = PathPlanningEvent::WorkerRegistered {
+            planner_id: self.planner_id.clone(),
+            worker_id: self.worker_id.clone(),
+            capabilities: self.capabilities.clone(),
+            timestamp: Utc::now(),
+        };
+        
+        let metadata = EventMetadata {
+            correlation_id: None,
+            causation_id: None,
+            user_id: None,
+            source: format!("worker-{}", self.worker_id),
+        };
+        
+        let event_envelope = EventEnvelope {
+            event_id: uuid::Uuid::new_v4(),
+            aggregate_id: self.planner_id.clone(),
+            aggregate_type: "PathPlanner".to_string(),
+            event_type: "WorkerRegistered".to_string(),
+            event_version: 1,
+            event_data: serde_json::to_value(&registration_event)?,
+            metadata: metadata.clone(),
+            occurred_at: Utc::now(),
+        };
+        
+        event_store.append_events(&self.planner_id, 0, vec![event_envelope]).await?;
+        
+        // Also send ready status
+        let ready_event = PathPlanningEvent::WorkerReady {
+            planner_id: self.planner_id.clone(),
+            worker_id: self.worker_id.clone(),
+            timestamp: Utc::now(),
+        };
+        
+        let ready_envelope = EventEnvelope {
+            event_id: uuid::Uuid::new_v4(),
+            aggregate_id: self.planner_id.clone(),
+            aggregate_type: "PathPlanner".to_string(),
+            event_type: "WorkerReady".to_string(),
+            event_version: 1,
+            event_data: serde_json::to_value(&ready_event)?,
+            metadata,
+            occurred_at: Utc::now(),
+        };
+        
+        event_store.append_events(&self.planner_id, 0, vec![ready_envelope]).await?;
+        
+        println!("✅ Worker {} registered and marked as ready", self.worker_id);
+        Ok(())
+    }
 }
 
 pub async fn run_kafka_worker() -> Result<(), Box<dyn std::error::Error>> {
-    let worker = KafkaPathPlanWorker::new("kafka-worker-1".to_string(), "main-path-planner".to_string());
+    // Generate unique worker ID to avoid conflicts
+    let unique_id = uuid::Uuid::new_v4().to_string()[..8].to_string();
+    let worker_id = format!("kafka-worker-{}", unique_id);
+    let worker = KafkaPathPlanWorker::new(worker_id, "main-path-planner".to_string());
     worker.run().await
 }
 

@@ -66,8 +66,8 @@ impl PathPlanningPlannerService {
     pub async fn run(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         println!("🚀 Path Planning Planner Service is running (Kafka Event-Driven)");
         
-        // Register a mock worker for demo purposes
-        self.register_mock_worker().await;
+        // Workers will register themselves via Kafka events
+        // No mock workers in production!
         
         println!("📡 Polling Kafka for new events...");
         
@@ -99,34 +99,48 @@ impl PathPlanningPlannerService {
     }
     
     async fn poll_and_process_kafka_events(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        // Use dedicated consumer for PathPlanRequested events
+        // Use dedicated consumer for events with better offset management
         let consumer: rdkafka::consumer::StreamConsumer = rdkafka::ClientConfig::new()
             .set("group.id", "planner-requests-group")
             .set("bootstrap.servers", "localhost:9092")
             .set("enable.partition.eof", "false")
             .set("session.timeout.ms", "6000")
             .set("enable.auto.commit", "true")
-            .set("auto.offset.reset", "latest")
+            .set("auto.offset.reset", "earliest") // Read from beginning to catch worker registrations
             .create()
             .map_err(|e| format!("Failed to create planner consumer: {}", e))?;
         
         consumer.subscribe(&["path-planning-events"])
             .map_err(|e| format!("Failed to subscribe to events: {}", e))?;
         
-        // Poll for a short time to get available events
-        let timeout = Duration::from_millis(100);
+        // Poll for a longer time to process all available events including worker registrations
+        let timeout = Duration::from_millis(2000); // Increased from 100ms to 2 seconds
         let start_time = std::time::Instant::now();
         
         while start_time.elapsed() < timeout {
-            match tokio::time::timeout(Duration::from_millis(50), consumer.recv()).await {
+            match tokio::time::timeout(Duration::from_millis(500), consumer.recv()).await {
                 Ok(Ok(message)) => {
                     if let Some(payload) = message.payload() {
                         let payload_str = String::from_utf8_lossy(payload);
                         if let Ok(event_envelope) = serde_json::from_str::<EventEnvelope>(&payload_str) {
-                            if event_envelope.event_type == "PathPlanRequested" {
-                                println!("📥 Found PathPlanRequested event from Kafka: {}", event_envelope.aggregate_id);
-                                if let Ok(event_data) = serde_json::from_value::<PathPlanningEvent>(event_envelope.event_data.clone()) {
-                                    self.process_event(event_data).await?;
+                            // Process different event types
+                            match event_envelope.event_type.as_str() {
+                                "PathPlanRequested" => {
+                                    println!("📥 Found PathPlanRequested event from Kafka: {}", event_envelope.aggregate_id);
+                                    if let Ok(event_data) = serde_json::from_value::<PathPlanningEvent>(event_envelope.event_data.clone()) {
+                                        self.process_event(event_data).await?;
+                                    }
+                                }
+                                "WorkerRegistered" | "WorkerReady" => {
+                                    println!("📥 Found worker event: {} from Kafka for aggregate {}", event_envelope.event_type, event_envelope.aggregate_id);
+                                    if let Ok(event_data) = serde_json::from_value::<PathPlanningEvent>(event_envelope.event_data.clone()) {
+                                        self.process_event(event_data).await?;
+                                    } else {
+                                        println!("⚠️ Failed to deserialize worker event");
+                                    }
+                                }
+                                _ => {
+                                    // Ignore other events
                                 }
                             }
                         }
@@ -199,7 +213,21 @@ impl PathPlanningPlannerService {
                     last_heartbeat: Utc::now(),
                 };
                 
-                self.available_workers.insert(worker_id, worker_info);
+                self.available_workers.insert(worker_id.clone(), worker_info);
+                println!("✅ Worker {} added to available workers list", worker_id);
+            }
+            
+            PathPlanningEvent::WorkerReady { worker_id, .. } => {
+                println!("✅ Worker ready via Kafka: {}", worker_id);
+                
+                // Update worker status to ready if it exists
+                if let Some(worker_info) = self.available_workers.get_mut(&worker_id) {
+                    worker_info.status = WorkerStatus::Ready;
+                    worker_info.last_heartbeat = Utc::now();
+                    println!("✅ Updated worker {} status to Ready", worker_id);
+                } else {
+                    println!("⚠️ Worker {} not found in available workers list", worker_id);
+                }
             }
             
             PathPlanningEvent::PlanCompleted { plan_id, worker_id, .. } => {
@@ -297,19 +325,6 @@ impl PathPlanningPlannerService {
                 WorkerStatus::Offline => println!("     ❌ {}: Offline", worker_id),
             }
         }
-    }
-    
-    async fn register_mock_worker(&mut self) {
-        let worker_id = "kafka-worker-1".to_string();
-        let worker_info = WorkerInfo {
-            worker_id: worker_id.clone(),
-            capabilities: vec![PlanningAlgorithm::AStar],
-            status: WorkerStatus::Ready,
-            last_heartbeat: Utc::now(),
-        };
-        
-        self.available_workers.insert(worker_id.clone(), worker_info);
-        println!("🤖 Registered mock Kafka worker: {} for demo purposes", worker_id);
     }
 }
 
