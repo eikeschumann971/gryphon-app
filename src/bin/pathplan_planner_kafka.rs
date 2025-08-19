@@ -74,6 +74,7 @@ impl PathPlanningPlannerService {
         // Set up a polling timer for new events from Kafka
         let mut event_poll_timer = interval(Duration::from_millis(500)); // More frequent polling
         let mut heartbeat = interval(Duration::from_secs(30));
+        let mut health_check_timer = interval(Duration::from_secs(60)); // Check worker health every minute
         
         loop {
             tokio::select! {
@@ -85,6 +86,11 @@ impl PathPlanningPlannerService {
                 // Periodic heartbeat and status update
                 _ = heartbeat.tick() => {
                     self.print_status().await;
+                }
+                
+                // Check worker health and mark stale workers as offline
+                _ = health_check_timer.tick() => {
+                    self.check_worker_health().await?;
                 }
                 
                 // Handle shutdown signal
@@ -131,7 +137,7 @@ impl PathPlanningPlannerService {
                                         self.process_event(event_data).await?;
                                     }
                                 }
-                                "WorkerRegistered" | "WorkerReady" => {
+                                "WorkerRegistered" | "WorkerReady" | "WorkerHeartbeat" | "WorkerOffline" => {
                                     println!("📥 Found worker event: {} from Kafka for aggregate {}", event_envelope.event_type, event_envelope.aggregate_id);
                                     if let Ok(event_data) = serde_json::from_value::<PathPlanningEvent>(event_envelope.event_data.clone()) {
                                         self.process_event(event_data).await?;
@@ -225,6 +231,28 @@ impl PathPlanningPlannerService {
                     worker_info.status = WorkerStatus::Ready;
                     worker_info.last_heartbeat = Utc::now();
                     println!("✅ Updated worker {} status to Ready", worker_id);
+                } else {
+                    println!("⚠️ Worker {} not found in available workers list", worker_id);
+                }
+            }
+            
+            PathPlanningEvent::WorkerHeartbeat { worker_id, timestamp, .. } => {
+                // Update last heartbeat timestamp
+                if let Some(worker_info) = self.available_workers.get_mut(&worker_id) {
+                    worker_info.last_heartbeat = timestamp.clone();
+                    println!("💓 Received heartbeat from worker {} at {}", worker_id, timestamp.format("%H:%M:%S"));
+                } else {
+                    println!("⚠️ Received heartbeat from unknown worker: {}", worker_id);
+                }
+            }
+            
+            PathPlanningEvent::WorkerOffline { worker_id, reason, .. } => {
+                println!("❌ Worker {} went offline: {}", worker_id, reason);
+                
+                // Mark worker as offline
+                if let Some(worker_info) = self.available_workers.get_mut(&worker_id) {
+                    worker_info.status = WorkerStatus::Offline;
+                    println!("✅ Marked worker {} as offline", worker_id);
                 } else {
                     println!("⚠️ Worker {} not found in available workers list", worker_id);
                 }
@@ -325,6 +353,58 @@ impl PathPlanningPlannerService {
                 WorkerStatus::Offline => println!("     ❌ {}: Offline", worker_id),
             }
         }
+    }
+    
+    async fn check_worker_health(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        let now = Utc::now();
+        let heartbeat_timeout = chrono::Duration::seconds(90); // 90 seconds timeout (3 missed heartbeats)
+        let mut workers_to_mark_offline = Vec::new();
+        
+        for (worker_id, worker_info) in &self.available_workers {
+            let time_since_heartbeat = now - worker_info.last_heartbeat;
+            
+            if time_since_heartbeat > heartbeat_timeout && !matches!(worker_info.status, WorkerStatus::Offline) {
+                println!("⚠️  Worker {} hasn't sent heartbeat for {} seconds, marking as offline", 
+                        worker_id, time_since_heartbeat.num_seconds());
+                workers_to_mark_offline.push(worker_id.clone());
+            }
+        }
+        
+        // Mark stale workers as offline and publish WorkerOffline events
+        for worker_id in workers_to_mark_offline {
+            if let Some(worker_info) = self.available_workers.get_mut(&worker_id) {
+                worker_info.status = WorkerStatus::Offline;
+                
+                // Publish WorkerOffline event to Kafka
+                let offline_event = PathPlanningEvent::WorkerOffline {
+                    planner_id: "main-path-planner".to_string(),
+                    worker_id: worker_id.clone(),
+                    reason: "Heartbeat timeout".to_string(),
+                    timestamp: now,
+                };
+                
+                let event_envelope = EventEnvelope {
+                    event_id: Uuid::new_v4(),
+                    aggregate_id: "main-path-planner".to_string(),
+                    aggregate_type: "PathPlanner".to_string(),
+                    event_type: offline_event.event_type().to_string(),
+                    event_version: 1,
+                    event_data: serde_json::to_value(&offline_event)?,
+                    metadata: EventMetadata {
+                        correlation_id: None,
+                        causation_id: None,
+                        user_id: Some("health_monitor".to_string()),
+                        source: "pathplan_planner_kafka".to_string(),
+                    },
+                    occurred_at: now,
+                };
+                
+                self.event_store.append_events("main-path-planner", 1, vec![event_envelope]).await?;
+                println!("📤 Published WorkerOffline event for worker {}", worker_id);
+            }
+        }
+        
+        Ok(())
     }
 }
 

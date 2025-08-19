@@ -52,6 +52,11 @@ pub enum PathPlanningEvent {
         reason: String,
         timestamp: DateTime<Utc>,
     },
+    WorkerHeartbeat {
+        planner_id: String,
+        worker_id: String,
+        timestamp: DateTime<Utc>,
+    },
     
     // Work assignment events
     PlanAssigned {
@@ -122,6 +127,7 @@ impl DomainEvent for PathPlanningEvent {
             PathPlanningEvent::WorkerBusy { .. } => "WorkerBusy",
             PathPlanningEvent::WorkerProcessing { .. } => "WorkerProcessing",
             PathPlanningEvent::WorkerOffline { .. } => "WorkerOffline",
+            PathPlanningEvent::WorkerHeartbeat { .. } => "WorkerHeartbeat",
             PathPlanningEvent::PlanAssigned { .. } => "PlanAssigned",
             PathPlanningEvent::PlanAssignmentAccepted { .. } => "PlanAssignmentAccepted",
             PathPlanningEvent::PlanAssignmentRejected { .. } => "PlanAssignmentRejected",
@@ -141,6 +147,7 @@ impl DomainEvent for PathPlanningEvent {
             PathPlanningEvent::WorkerBusy { planner_id, .. } => planner_id,
             PathPlanningEvent::WorkerProcessing { planner_id, .. } => planner_id,
             PathPlanningEvent::WorkerOffline { planner_id, .. } => planner_id,
+            PathPlanningEvent::WorkerHeartbeat { planner_id, .. } => planner_id,
             PathPlanningEvent::PlanAssigned { planner_id, .. } => planner_id,
             PathPlanningEvent::PlanAssignmentAccepted { planner_id, .. } => planner_id,
             PathPlanningEvent::PlanAssignmentRejected { planner_id, .. } => planner_id,
@@ -162,6 +169,7 @@ impl DomainEvent for PathPlanningEvent {
             PathPlanningEvent::WorkerBusy { timestamp, .. } => *timestamp,
             PathPlanningEvent::WorkerProcessing { timestamp, .. } => *timestamp,
             PathPlanningEvent::WorkerOffline { timestamp, .. } => *timestamp,
+            PathPlanningEvent::WorkerHeartbeat { timestamp, .. } => *timestamp,
             PathPlanningEvent::PlanAssigned { timestamp, .. } => *timestamp,
             PathPlanningEvent::PlanAssignmentAccepted { timestamp, .. } => *timestamp,
             PathPlanningEvent::PlanAssignmentRejected { timestamp, .. } => *timestamp,

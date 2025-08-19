@@ -65,6 +65,11 @@ impl AggregateRoot for PathPlanner {
 				}
 				self.plan_assignments.retain(|a| a.worker_id != *worker_id);
 			}
+			PathPlanningEvent::WorkerHeartbeat { worker_id, timestamp, .. } => {
+				if let Some(worker) = self.registered_workers.iter_mut().find(|w| w.worker_id == *worker_id) {
+					worker.last_heartbeat = *timestamp;
+				}
+			}
 			PathPlanningEvent::PlanAssigned { plan_id, worker_id, timeout_seconds, timestamp, .. } => {
 				let assignment = PlanAssignment {
 					plan_id: plan_id.clone(),
