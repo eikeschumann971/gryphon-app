@@ -1,3 +1,6 @@
+pub mod pathplan_client;
+
+pub use pathplan_client::*;
 pub mod logical_agent_service;
 pub mod technical_agent_service;
 pub mod kinematic_agent_service;

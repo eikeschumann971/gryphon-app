@@ -291,5 +291,8 @@ pub async fn run_kafka_worker() -> Result<(), Box<dyn std::error::Error>> {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Initialize combined logger (file + console fallback)
+    let logger = gryphon_app::adapters::outbound::init_combined_logger("./domain.log");
+    logger.info("Starting Kafka Path Planning Worker");
     run_kafka_worker().await
 }

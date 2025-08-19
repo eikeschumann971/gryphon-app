@@ -8,6 +8,9 @@ use std::f64::consts::PI;
 
 async fn run_kafka_client() -> Result<(), Box<dyn std::error::Error>> {
     println!("🚀 Starting Path Planning Client (Kafka Event-Driven)");
+    // Initialize combined logger (file + console fallback)
+    let logger = gryphon_app::adapters::outbound::init_combined_logger("./domain.log");
+    logger.info("Starting Path Planning Client (Kafka Event-Driven)");
     println!("📋 Using default configuration for demo");
     
     // Initialize Kafka Event Store
@@ -18,6 +21,7 @@ async fn run_kafka_client() -> Result<(), Box<dyn std::error::Error>> {
     ).await?;
     
     println!("✅ Connected to Kafka event store for distributed event communication");
+    logger.info("Connected to Kafka event store for distributed event communication");
     println!("🎯 Path Planning Client is running");
     
     // Send a single path planning request

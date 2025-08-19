@@ -20,6 +20,9 @@ use std::sync::Arc;
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("🗺️  Starting Path Planning Planner Service (Event-Driven)");
+    // Initialize combined logger (file + console fallback)
+    let logger = gryphon_app::adapters::outbound::init_combined_logger("./domain.log");
+    logger.info("Starting Path Planning Planner Service (Event-Driven)");
     
     // Initialize tracing
     tracing_subscriber::fmt::init();

@@ -30,47 +30,56 @@ pub struct PathPlanningPlannerService {
     #[allow(dead_code)]
     last_processed_version: HashMap<String, u64>,
     available_workers: HashMap<String, WorkerInfo>,
+    logger: gryphon_app::domains::DynLogger,
 }
 
 impl PathPlanningPlannerService {
-    pub async fn new() -> Result<Self, Box<dyn std::error::Error>> {
+    pub async fn new(logger: gryphon_app::domains::DynLogger) -> Result<Self, Box<dyn std::error::Error>> {
+        // keep println for console UX, but also emit structured domain logs
         println!("🗺️  Starting Path Planning Planner Service (Kafka Event-Driven)");
+        logger.info("Starting Path Planning Planner Service (Kafka Event-Driven)");
         println!("📋 Using default configuration for demo");
-        
+        logger.info("Using default configuration for demo");
+
         // Initialize Kafka Event Store
         let event_store = Arc::new(
             KafkaEventStore::new(
-                "localhost:9092", 
-                "path-planning-events", 
+                "localhost:9092",
+                "path-planning-events",
                 "planner-group"
             ).await?
         ) as Arc<dyn EventStore>;
-        
+
         println!("✅ Connected to Kafka event store for distributed event communication");
-        
+        logger.info("Connected to Kafka event store for distributed event communication");
+
         let mut planners = HashMap::new();
-        
+
         // Create new planner (skip event restoration for now to avoid hanging)
         let planner_id = "main-path-planner".to_string();
         let planner = PathPlanner::new(planner_id.clone(), PlanningAlgorithm::AStar);
         planners.insert(planner_id.clone(), planner);
         println!("✅ Created new PathPlanner with A* algorithm");
-        
+        logger.info("Created new PathPlanner with A* algorithm");
+
         Ok(Self {
             planners,
             event_store,
             last_processed_version: HashMap::new(),
             available_workers: HashMap::new(),
+            logger,
         })
     }
     
     pub async fn run(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        println!("🚀 Path Planning Planner Service is running (Kafka Event-Driven)");
+    println!("🚀 Path Planning Planner Service is running (Kafka Event-Driven)");
+    self.logger.info("Path Planning Planner Service is running (Kafka Event-Driven)");
         
         // Workers will register themselves via Kafka events
         // No mock workers in production!
         
-        println!("📡 Polling Kafka for new events...");
+    println!("📡 Polling Kafka for new events...");
+    self.logger.info("Polling Kafka for new events");
         
         // Set up a polling timer for new events from Kafka
         let mut event_poll_timer = interval(Duration::from_millis(500)); // More frequent polling
@@ -133,13 +142,15 @@ impl PathPlanningPlannerService {
                             // Process different event types
                             match event_envelope.event_type.as_str() {
                                 "PathPlanRequested" => {
-                                    println!("📥 Found PathPlanRequested event from Kafka: {}", event_envelope.aggregate_id);
+                                                    println!("📥 Found PathPlanRequested event from Kafka: {}", event_envelope.aggregate_id);
+                                                    self.logger.info(&format!("Found PathPlanRequested event from Kafka: {}", event_envelope.aggregate_id));
                                     if let Ok(event_data) = serde_json::from_value::<PathPlanningEvent>(event_envelope.event_data.clone()) {
                                         self.process_event(event_data).await?;
                                     }
                                 }
                                 "WorkerRegistered" | "WorkerReady" | "WorkerHeartbeat" | "WorkerOffline" => {
                                     println!("📥 Found worker event: {} from Kafka for aggregate {}", event_envelope.event_type, event_envelope.aggregate_id);
+                                    self.logger.info(&format!("Found worker event: {} from Kafka for aggregate {}", event_envelope.event_type, event_envelope.aggregate_id));
                                     if let Ok(event_data) = serde_json::from_value::<PathPlanningEvent>(event_envelope.event_data.clone()) {
                                         self.process_event(event_data).await?;
                                     } else {
@@ -174,6 +185,7 @@ impl PathPlanningPlannerService {
                 .. 
             } => {
                 println!("🎯 Processing PathPlanRequested event from Kafka:");
+                self.logger.info(&format!("Processing PathPlanRequested event: request_id={}, plan_id={}, agent={}", request_id, plan_id, agent_id));
                 println!("   Request ID: {}", request_id);
                 println!("   Plan ID: {}", plan_id);
                 println!("   Agent: {}", agent_id);
@@ -203,6 +215,7 @@ impl PathPlanningPlannerService {
                         }
                         
                         println!("✅ Assigned plan {} to worker {} via Kafka", plan_id, worker_id);
+                        self.logger.info(&format!("Assigned plan {} to worker {} via Kafka", plan_id, worker_id));
                     }
                     None => {
                         println!("⚠️  No available workers for plan {}. Request queued.", plan_id);
@@ -212,6 +225,7 @@ impl PathPlanningPlannerService {
             
             PathPlanningEvent::WorkerRegistered { worker_id, capabilities, .. } => {
                 println!("👷 Worker registered via Kafka: {} with capabilities: {:?}", worker_id, capabilities);
+                self.logger.info(&format!("Worker registered via Kafka: {} capabilities={:?}", worker_id, capabilities));
                 
                 let worker_info = WorkerInfo {
                     worker_id: worker_id.clone(),
@@ -222,16 +236,19 @@ impl PathPlanningPlannerService {
                 
                 self.available_workers.insert(worker_id.clone(), worker_info);
                 println!("✅ Worker {} added to available workers list", worker_id);
+                self.logger.info(&format!("Worker {} added to available workers list", worker_id));
             }
             
             PathPlanningEvent::WorkerReady { worker_id, .. } => {
                 println!("✅ Worker ready via Kafka: {}", worker_id);
+                self.logger.info(&format!("Worker ready via Kafka: {}", worker_id));
                 
                 // Update worker status to ready if it exists
                 if let Some(worker_info) = self.available_workers.get_mut(&worker_id) {
                     worker_info.status = WorkerStatus::Ready;
                     worker_info.last_heartbeat = Utc::now();
                     println!("✅ Updated worker {} status to Ready", worker_id);
+                    self.logger.info(&format!("Updated worker {} status to Ready", worker_id));
                 } else {
                     println!("⚠️ Worker {} not found in available workers list", worker_id);
                 }
@@ -242,6 +259,7 @@ impl PathPlanningPlannerService {
                 if let Some(worker_info) = self.available_workers.get_mut(&worker_id) {
                     worker_info.last_heartbeat = timestamp;
                     println!("💓 Received heartbeat from worker {} at {}", worker_id, timestamp.format("%H:%M:%S"));
+                    self.logger.info(&format!("Received heartbeat from worker {} at {}", worker_id, timestamp.format("%H:%M:%S")));
                 } else {
                     println!("⚠️ Received heartbeat from unknown worker: {}", worker_id);
                 }
@@ -249,6 +267,7 @@ impl PathPlanningPlannerService {
             
             PathPlanningEvent::WorkerOffline { worker_id, reason, .. } => {
                 println!("❌ Worker {} went offline: {}", worker_id, reason);
+                self.logger.warn(&format!("Worker {} went offline: {}", worker_id, reason));
                 
                 // Mark worker as offline
                 if let Some(worker_info) = self.available_workers.get_mut(&worker_id) {
@@ -261,6 +280,7 @@ impl PathPlanningPlannerService {
             
             PathPlanningEvent::PlanCompleted { plan_id, worker_id, .. } => {
                 println!("🎉 Plan completed via Kafka: {} by worker {:?}", plan_id, worker_id);
+                self.logger.info(&format!("Plan completed via Kafka: {} by worker {:?}", plan_id, worker_id));
                 
                 // Mark worker as available again
                 if let Some(worker_id) = worker_id {
@@ -272,6 +292,7 @@ impl PathPlanningPlannerService {
             
             _ => {
                 println!("📝 Processed other event type from Kafka");
+                self.logger.info("Processed other event type from Kafka");
             }
         }
         
@@ -412,6 +433,10 @@ impl PathPlanningPlannerService {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let mut service = PathPlanningPlannerService::new().await?;
+    // Initialize combined logger (file + console fallback)
+    let logger = gryphon_app::adapters::outbound::init_combined_logger("./domain.log");
+    logger.info("Starting Path Planning Planner Service (Kafka Event-Driven)");
+
+    let mut service = PathPlanningPlannerService::new(logger.clone()).await?;
     service.run().await
 }

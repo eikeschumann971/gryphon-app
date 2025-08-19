@@ -31,3 +31,14 @@ pub enum PlanningAlgorithm {
     Dijkstra,
     DynamicWindow,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct PlanningScenario {
+    pub name: String,
+    pub description: String,
+    pub agent_id: String,
+    pub start_position: Position2D,
+    pub destination_position: Position2D,
+    pub start_orientation: Orientation2D,
+    pub destination_orientation: Orientation2D,
+}
