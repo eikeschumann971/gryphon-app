@@ -19,6 +19,7 @@ topics=(
   "technical-agent-events"
   "kinematic-agent-events"
   "path-planning-events"
+  "path-planning-replies"
   "dynamics-events"
   "gui-events"
 )

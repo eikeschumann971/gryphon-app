@@ -7,6 +7,7 @@ use rdkafka::Message;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::time::{interval, Duration};
+use tokio::sync::mpsc;
 use uuid::Uuid;
 
 #[derive(Debug, Clone)]
@@ -75,29 +76,70 @@ impl PathPlanningPlannerService {
 
         self.logger.info("📡 Polling Kafka for new events");
 
-        // Set up a polling timer for new events from Kafka
-        let mut event_poll_timer = interval(Duration::from_millis(500)); // More frequent polling
-        let mut heartbeat = interval(Duration::from_secs(30));
-        let mut health_check_timer = interval(Duration::from_secs(60)); // Check worker health every minute
+        // Set up a dedicated consumer task for event-driven processing
+        let consumer: rdkafka::consumer::StreamConsumer = rdkafka::ClientConfig::new()
+            .set("group.id", "planner-requests-group")
+            .set("bootstrap.servers", "localhost:9092")
+            .set("enable.partition.eof", "false")
+            .set("session.timeout.ms", "6000")
+            .set("enable.auto.commit", "true")
+            .set("auto.offset.reset", "earliest") // Read from beginning to catch worker registrations
+            .create()
+            .map_err(|e| format!("Failed to create planner consumer: {}", e))?;
 
+        consumer
+            .subscribe(&["path-planning-events"])?;
+
+        let logger = self.logger.clone();
+        let mut health_check_timer = interval(Duration::from_secs(60));
+
+        // Create a reply event store so we can publish responses to a shared replies topic
+        let reply_store: Arc<dyn EventStore> = Arc::new(
+            KafkaEventStore::new("localhost:9092", "path-planning-replies", "planner-reply-publisher").await?
+        );
+
+        // Channel to receive EventEnvelope from consumer task
+        let (tx, mut rx) = mpsc::channel::<EventEnvelope>(128);
+
+        // Spawn consumer task that pushes EventEnvelopes into the mpsc channel
+        let tx_clone = tx.clone();
+        let logger_clone = logger.clone();
+        tokio::spawn(async move {
+            let recv_consumer = consumer;
+            loop {
+                match recv_consumer.recv().await {
+                    Ok(message) => {
+                        if let Some(payload) = message.payload() {
+                            if let Ok(event_envelope) = serde_json::from_slice::<EventEnvelope>(payload) {
+                                let _ = tx_clone.send(event_envelope).await;
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        logger_clone.warn(&format!("Planner consumer error: {}", e));
+                        tokio::time::sleep(Duration::from_millis(200)).await;
+                    }
+                }
+            }
+        });
+
+        // Main loop: process incoming EventEnvelopes and periodic tasks
         loop {
             tokio::select! {
-                // Poll for new events from Kafka
-                _ = event_poll_timer.tick() => {
-                    self.poll_and_process_kafka_events().await?;
+                Some(envelope) = rx.recv() => {
+                    // Process the envelope and optionally publish replies using reply_store
+                    self.logger.info(&format!("Received envelope in planner: {} for aggregate {}", envelope.event_type, envelope.aggregate_id));
+                    if envelope.event_type == "PathPlanRequested" {
+                        self.logger.info("Planner received PathPlanRequested - attempting assignment");
+                    }
+                    if let Err(e) = self.process_event_envelope(envelope, Some(reply_store.clone())).await {
+                        self.logger.warn(&format!("Failed to process envelope: {}", e));
+                    }
                 }
-
-                // Periodic heartbeat and status update
-                _ = heartbeat.tick() => {
-                    self.print_status().await;
-                }
-
-                // Check worker health and mark stale workers as offline
                 _ = health_check_timer.tick() => {
                     self.check_worker_health().await?;
+                    self.print_status().await;
                 }
-
-                // Handle shutdown signal
                 _ = tokio::signal::ctrl_c() => {
                     println!("🛑 Shutting down Path Planning Planner Service");
                     break;
@@ -165,6 +207,21 @@ impl PathPlanningPlannerService {
                                         self.process_event(event_data).await?;
                                     } else {
                                         self.logger.warn("⚠️ Failed to deserialize worker event");
+                                    }
+                                }
+                                "PlanCompleted" => {
+                                    self.logger.info(&format!(
+                                        "📥 Found PlanCompleted event from Kafka for aggregate {}",
+                                        event_envelope.aggregate_id
+                                    ));
+                                    if let Ok(event_data) =
+                                        serde_json::from_value::<PathPlanningEvent>(
+                                            event_envelope.event_data.clone(),
+                                        )
+                                    {
+                                        self.process_event(event_data).await?;
+                                    } else {
+                                        self.logger.warn("⚠️ Failed to deserialize PlanCompleted event");
                                     }
                                 }
                                 _ => {
@@ -363,6 +420,72 @@ impl PathPlanningPlannerService {
         }
 
         Ok(())
+    }
+
+    // New higher-level helper to process raw EventEnvelope and optionally publish replies
+    async fn process_event_envelope(&mut self, envelope: EventEnvelope, reply_store: Option<Arc<dyn EventStore>>) -> Result<(), Box<dyn std::error::Error>> {
+        // Convert envelope.event_data to PathPlanningEvent and call process_event
+        if let Ok(event) = serde_json::from_value::<PathPlanningEvent>(envelope.event_data.clone()) {
+            match &event {
+                PathPlanningEvent::PathPlanRequested { plan_id, .. } => {
+                    // When assigning a plan, publish PlanAssigned to both main topic and replies
+                    if let Some(worker_id) = self.find_available_worker() {
+                        // preserve the incoming request's correlation id so the client can match replies
+                        let corr = envelope.metadata.correlation_id.clone();
+                        let reply_envelope = self.build_plan_assigned_envelope(plan_id, &worker_id, corr)?;
+                        // persist and publish to main topic
+                        self.event_store.append_events(&reply_envelope.aggregate_id, 1, vec![reply_envelope.clone()]).await?;
+                        // also publish to replies topic if provided (copying correlation id)
+                        if let Some(store) = reply_store {
+                            // append a cloned copy to replies topic
+                            let en = reply_envelope.clone();
+                            let en_agg = en.aggregate_id.clone();
+                            store.append_events(&en_agg, 1, vec![en]).await?;
+                        }
+                    }
+                }
+                _ => {
+                    // Default: just call process_event for side-effects
+                    self.process_event(event).await?;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn build_plan_assigned_envelope(&self, plan_id: &str, worker_id: &str, correlation_id: Option<uuid::Uuid>) -> Result<EventEnvelope, Box<dyn std::error::Error>> {
+        // Build minimal PlanAssigned event envelope copying planner_id
+        let event = PathPlanningEvent::PlanAssigned {
+            planner_id: "main-path-planner".to_string(),
+            plan_id: plan_id.to_string(),
+            worker_id: worker_id.to_string(),
+            request_id: "".to_string(),
+            agent_id: "".to_string(),
+            start_position: Position2D { x: 0.0, y: 0.0 },
+            destination_position: Position2D { x: 0.0, y: 0.0 },
+            start_orientation: Orientation2D { angle: 0.0 },
+            destination_orientation: Orientation2D { angle: 0.0 },
+            timeout_seconds: 300,
+            timestamp: Utc::now(),
+        };
+
+        let envelope = EventEnvelope {
+            event_id: Uuid::new_v4(),
+            aggregate_id: "main-path-planner".to_string(),
+            aggregate_type: "PathPlanner".to_string(),
+            event_type: event.event_type().to_string(),
+            event_version: 1,
+            event_data: serde_json::to_value(&event)?,
+            metadata: EventMetadata {
+                correlation_id: correlation_id.or(Some(Uuid::new_v4())),
+                causation_id: None,
+                user_id: Some(worker_id.to_string()),
+                source: "pathplan_planner_kafka".to_string(),
+            },
+            occurred_at: Utc::now(),
+        };
+
+        Ok(envelope)
     }
 
     fn find_available_worker(&self) -> Option<String> {
