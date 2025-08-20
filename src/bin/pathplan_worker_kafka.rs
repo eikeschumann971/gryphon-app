@@ -42,6 +42,18 @@ impl KafkaPathPlanWorker {
             .await?,
         );
 
+        // Also initialize a reply store so this worker can publish replies that
+        // clients subscribe to (path-planning-replies). This preserves the
+        // correlation_id so clients can match responses.
+        let reply_store = Arc::new(
+            KafkaEventStore::new(
+                "localhost:9092",
+                "path-planning-replies",
+                &format!("worker-reply-group-{}", self.worker_id),
+            )
+            .await?,
+        );
+
         // Register this worker with the planner via Kafka event
         self.register_worker(&event_store).await?;
 
@@ -118,7 +130,8 @@ impl KafkaPathPlanWorker {
                                                 };
 
                                                 let metadata = EventMetadata {
-                                                    correlation_id: None,
+                                                    // Preserve correlation id from the PlanAssigned envelope so clients can match replies
+                                                    correlation_id: event.metadata.correlation_id,
                                                     causation_id: Some(event.event_id),
                                                     user_id: None,
                                                     source: "pathplan_worker_kafka".to_string(),
@@ -130,10 +143,23 @@ impl KafkaPathPlanWorker {
                                                     metadata
                                                 )?;
 
-                                                // Publish completion to Kafka
-                                                event_store.append_events(&plan_id, 1, vec![completion_envelope]).await?;
-                                                self.logger.info("Published PlanCompleted event to Kafka");
-                                                self.logger.info(&format!("Plan {} completed and published to Kafka successfully", plan_id));
+                                                // Publish completion to Kafka (main topic)
+                                                event_store
+                                                    .append_events(&plan_id, 1, vec![completion_envelope.clone()])
+                                                    .await?;
+                                                // Also publish to replies topic so clients
+                                                // that subscribe to `path-planning-replies`
+                                                // will receive PlanCompleted messages and
+                                                // can correlate them using correlation_id.
+                                                reply_store
+                                                    .append_events(&plan_id, 1, vec![completion_envelope])
+                                                    .await?;
+
+                                                self.logger.info("Published PlanCompleted event to Kafka (main + replies)");
+                                                self.logger.info(&format!(
+                                                    "Plan {} completed and published to Kafka successfully",
+                                                    plan_id
+                                                ));
                                             } else if worker_id != self.worker_id {
                                                 self.logger.info(&format!("Ignoring assignment for different worker: {} (this worker: {})", worker_id, self.worker_id));
                                             }

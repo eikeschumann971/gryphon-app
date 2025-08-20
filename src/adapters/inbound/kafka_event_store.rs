@@ -7,6 +7,7 @@ use rdkafka::producer::{FutureProducer, FutureRecord};
 use rdkafka::Message;
 use serde_json;
 use std::time::Duration;
+use uuid::Uuid;
 
 /// Kafka-based EventStore implementation for distributed event-driven architecture
 ///
@@ -14,15 +15,15 @@ use std::time::Duration;
 /// event consumption across multiple processes
 pub struct KafkaEventStore {
     producer: FutureProducer,
-    consumer: StreamConsumer,
     topic_name: String,
+    bootstrap_servers: String,
 }
 
 impl KafkaEventStore {
     pub async fn new(
         bootstrap_servers: &str,
         topic_name: &str,
-        group_id: &str,
+        _group_id: &str,
     ) -> Result<Self, String> {
         let producer: FutureProducer = ClientConfig::new()
             .set("bootstrap.servers", bootstrap_servers)
@@ -31,21 +32,10 @@ impl KafkaEventStore {
             .create()
             .map_err(|e| format!("Failed to create Kafka producer: {}", e))?;
 
-        let consumer: StreamConsumer = ClientConfig::new()
-            .set("bootstrap.servers", bootstrap_servers)
-            .set("group.id", group_id)
-            .set("client.id", "gryphon-consumer")
-            .set("enable.partition.eof", "false")
-            .set("session.timeout.ms", "6000")
-            .set("enable.auto.commit", "true")
-            .set("auto.offset.reset", "earliest")
-            .create()
-            .map_err(|e| format!("Failed to create Kafka consumer: {}", e))?;
-
         Ok(Self {
             producer,
-            consumer,
             topic_name: topic_name.to_string(),
+            bootstrap_servers: bootstrap_servers.to_string(),
         })
     }
 }
@@ -82,19 +72,31 @@ impl EventStore for KafkaEventStore {
         aggregate_id: &str,
         _from_version: u64,
     ) -> Result<Vec<EventEnvelope>, String> {
-        // Subscribe to the topic
-        self.consumer
+        // Create a short-lived consumer with a unique group id so we read from the beginning
+        let temp_group = format!("temp-reader-{}", Uuid::new_v4());
+        let temp_consumer: StreamConsumer = ClientConfig::new()
+            .set("bootstrap.servers", &self.bootstrap_servers)
+            .set("group.id", &temp_group)
+            .set("client.id", "gryphon-temp-consumer")
+            .set("enable.partition.eof", "false")
+            .set("session.timeout.ms", "6000")
+            .set("enable.auto.commit", "false")
+            .set("auto.offset.reset", "earliest")
+            .create()
+            .map_err(|e| format!("Failed to create temp consumer: {}", e))?;
+
+        temp_consumer
             .subscribe(&[&self.topic_name])
             .map_err(|e| format!("Failed to subscribe to topic: {}", e))?;
 
         let mut events = Vec::new();
         let timeout = Duration::from_secs(2);
 
-        // Read all available messages
+        // Read all available messages within the timeout
         let start_time = std::time::Instant::now();
         while start_time.elapsed() < timeout {
-            match self.consumer.recv().await {
-                Ok(message) => {
+            match tokio::time::timeout(Duration::from_millis(200), temp_consumer.recv()).await {
+                Ok(Ok(message)) => {
                     if let Some(key) = message.key() {
                         let key_str = String::from_utf8_lossy(key);
                         if key_str.contains(aggregate_id) {
@@ -108,7 +110,7 @@ impl EventStore for KafkaEventStore {
                         }
                     }
                 }
-                Err(_) => break, // No more messages or timeout
+                _ => break, // Timeout or error - stop reading
             }
         }
 
@@ -120,18 +122,36 @@ impl EventStore for KafkaEventStore {
         event_type: &str,
         _from_timestamp: Option<DateTime<Utc>>,
     ) -> Result<Vec<EventEnvelope>, String> {
-        // Subscribe to the topic
-        self.consumer
+        // Create ephemeral consumer for polling new events. Use 'latest' so the
+        // ephemeral consumer starts at the end of the log and only receives
+        // messages produced after the request. Make the read window slightly
+        // longer to allow subscription and partition assignment to complete.
+        let temp_group = format!("temp-reader-{}", Uuid::new_v4());
+        let temp_consumer: StreamConsumer = ClientConfig::new()
+            .set("bootstrap.servers", &self.bootstrap_servers)
+            .set("group.id", &temp_group)
+            .set("client.id", format!("gryphon-temp-consumer-{}", Uuid::new_v4()))
+            .set("enable.partition.eof", "false")
+            .set("session.timeout.ms", "6000")
+            .set("enable.auto.commit", "false")
+            .set("auto.offset.reset", "latest")
+            .create()
+            .map_err(|e| format!("Failed to create temp consumer: {}", e))?;
+
+        temp_consumer
             .subscribe(&[&self.topic_name])
             .map_err(|e| format!("Failed to subscribe to topic: {}", e))?;
 
         let mut events = Vec::new();
-        let timeout = Duration::from_millis(500); // Reduced timeout for better responsiveness
+        // Increase the read window so subscription/assignment can settle and
+        // newly produced events are received.
+        let timeout = Duration::from_millis(1500);
 
-        // Read all available messages
+        // Read all available messages within the timeout
         let start_time = std::time::Instant::now();
         while start_time.elapsed() < timeout {
-            match tokio::time::timeout(Duration::from_millis(100), self.consumer.recv()).await {
+            // Wait a bit longer per recv to tolerate scheduling delays
+            match tokio::time::timeout(Duration::from_millis(300), temp_consumer.recv()).await {
                 Ok(Ok(message)) => {
                     if let Some(payload) = message.payload() {
                         let payload_str = String::from_utf8_lossy(payload);
@@ -145,7 +165,7 @@ impl EventStore for KafkaEventStore {
                         }
                     }
                 }
-                _ => break, // Timeout or error - no more messages available
+                _ => break, // Timeout or error - stop
             }
         }
 
