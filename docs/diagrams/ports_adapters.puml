@@ -19,6 +19,7 @@ package "Outbound Adapters" {
   component "FilesystemDataSource" as FS <<adapter>>
   component "PostgresGraphStore" as PG <<adapter>>
   component "KafkaAdapter" as KAFKA <<adapter>>
+    component "ESRS PgStore Adapter" as ESRS <<adapter>>
   component "FileLogger" as FILELOG <<adapter>>
   component "ConsoleLogger" as CONSLOG <<adapter>>
 }
@@ -37,16 +38,19 @@ PathPlanningService ..> LoggerPort : logs domain events to
 FS ..|> DataSourcePort
 PG ..|> GraphStorePort
 KAFKA ..|> EventStorePort
+ESRS ..|> EventStorePort
 FILELOG ..|> LoggerPort
 CONSLOG ..|> LoggerPort
 
 PG --> DB : stores graph bytes
 FS --> ASSETS : reads/writes graphs
 KAFKA --> [Kafka Cluster]
+ESRS --> DB : mirror store (best-effort)
 
 note right of PathPlanningService
   - Implements orchestration of path planning
   - Uses command actors / aggregates
+  - Events are published to Kafka; ESRS PgStore mirrors events into Postgres for queries
 end note
 
 @enduml

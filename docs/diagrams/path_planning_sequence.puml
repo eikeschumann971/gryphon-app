@@ -9,7 +9,8 @@ participant CommandActor as "PathPlanningCommandActor"
 participant Planner as "PathPlanner (aggregate)"
 participant Worker as "PathPlanWorker"
 participant GraphStore as "GraphStore (Postgres / Filesystem)"
-participant EventStore as "EventStore"
+participant EventStore as "EventStore (Kafka primary)"
+participant EsrsStore as "ESRS PgStore (Postgres mirror)"
 
 User -> GUI: Request route (start, destination)
 note left of API
@@ -19,7 +20,8 @@ end note
 GUI -> API: POST /route {start, destination}
 API -> Service: validate + create request
 Service -> CommandActor: create_plan_request(command)
-CommandActor -> EventStore: append event (PathPlanRequested)
+CommandActor -> EventStore: append event (PathPlanRequested)  \n(published to Kafka)
+EventStore -> EsrsStore: best-effort mirror (async)
 EventStore -> Service: ACK
 Service -> Planner: dispatch PathPlanRequested
 Planner -> GraphStore: load_graph_bytes(map_id)
@@ -28,7 +30,8 @@ Planner -> Worker: assign plan (PlanAssigned)
 Worker -> Planner: PlanAssignmentAccepted
 Worker -> Planner: compute route (uses graph)
 Worker -> Planner: return PlanCompleted (waypoints)
-Planner -> EventStore: append events (PlanCompleted)
+Planner -> EventStore: append events (PlanCompleted)  \n(published to Kafka)
+EventStore -> EsrsStore: best-effort mirror (async)
 EventStore -> Planner: ACK
 Planner -> Service: emit plan result / update state
 Service -> API: notify completion / response

@@ -18,40 +18,54 @@ The Gryphon App is a sophisticated multi-agent system built using Domain-Driven 
 - Kafka is used as the event store for scalability and durability (KRaft mode - no Zookeeper required)
 - PostgreSQL stores snapshots for performance optimization
 
+Note: The project now uses an ESRS-based Postgres mirror (ESRS PgStore) by default to provide a SQL-backed event view; Kafka remains the primary event bus and authoritative source of events. The ESRS mirror is best-effort and tolerant of duplicate events.
+
 ### Domains
 
 #### LogicalAgent
+
 Manages high-level reasoning and decision-making agents with:
+
 - Objectives and goal management
 - Knowledge base with facts and rules
 - Decision trees for automated reasoning
 
 #### TechnicalAgent
+
 Handles physical and technical aspects of agents:
+
 - Hardware specifications (sensors, actuators)
 - Software modules and capabilities
 - Component status monitoring
 
 #### KinematicAgent
+
 Manages motion and positioning:
+
 - 3D position, velocity, and acceleration
 - Kinematic constraints and models
 - Trajectory tracking
 
 #### PathPlanning
+
 Handles route planning and obstacle avoidance:
+
 - Multiple planning algorithms (A*, RRT, etc.)
 - Workspace modeling with obstacles
 - Path optimization
 
 #### Dynamics
+
 Simulates physical dynamics:
+
 - Force and torque calculations
 - Physics models (Newtonian, etc.)
 - Real-time simulation
 
 #### GUI
+
 Provides user interface capabilities:
+
 - Window and component management
 - User session tracking
 - Real-time visualization

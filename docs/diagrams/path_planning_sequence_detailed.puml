@@ -9,7 +9,8 @@ participant CommandActor as "PathPlanningCommandActor"
 participant Planner as "PathPlanner (aggregate)"
 participant Worker as "PathPlanWorker"
 participant GraphStore as "GraphStore (Postgres / Filesystem)"
-participant EventStore as "EventStore"
+participant EventStore as "EventStore (Kafka primary)"
+participant EsrsStore as "ESRS PgStore (Postgres mirror)"
 
 User -> GUI: click 'Plan route' (start, goal)
 GUI -> API: POST /route {start, destination, planner_id?}
@@ -21,8 +22,12 @@ API -> Service: validate inputs, auth
 activate Service
 Service -> CommandActor: create_plan_request(command)
 activate CommandActor
-CommandActor -> EventStore: append event (PathPlanRequested)
+CommandActor -> EventStore: append event (PathPlanRequested)\n(published to Kafka)
 activate EventStore
+EventStore -> EsrsStore: mirror persist (best-effort, async)
+activate EsrsStore
+EsrsStore --> EventStore: mirror ack (ok/duplicate tolerant)
+deactivate EsrsStore
 EventStore --> CommandActor: ack
 deactivate EventStore
 
@@ -48,8 +53,12 @@ Worker -> Planner: PlanCompleted (waypoints)
 deactivate Worker
 
 activate Planner
-Planner -> EventStore: append events (PlanCompleted)
+Planner -> EventStore: append events (PlanCompleted)\n(published to Kafka)
 activate EventStore
+EventStore -> EsrsStore: mirror persist (best-effort, async)
+activate EsrsStore
+EsrsStore --> EventStore: mirror ack
+deactivate EsrsStore
 EventStore --> Planner: ack
 deactivate EventStore
 Planner -> Service: emit result / update state

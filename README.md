@@ -5,6 +5,8 @@ A sophisticated multi-agent system built with Domain-Driven Design (DDD), Event 
 ## Features
 
 - **Event Sourcing**: All state changes captured as immutable events using Kafka
+
+   Note: the project now uses an ESRS-based Postgres mirror (ESRS PgStore) by default to provide a SQL-backed event view; Kafka remains the primary event bus and authoritative source of events.
 - **DDD Architecture**: Clean domain separation with aggregates, events, and services  
 - **CQRS**: Command and Query Responsibility Segregation with projections
 - **Multi-Agent Support**: Six specialized agent domains for autonomous operations
@@ -97,9 +99,18 @@ A sophisticated multi-agent system built with Domain-Driven Design (DDD), Event 
 - If the Kafka container fails to start, check `docker compose logs kafka` for errors about storage (meta.properties), permissions, or cluster id.
 - The compose mounts `kafka-setup.sh` — ensure that file is executable if you edit it locally. The script will retry up to 10 times (2s each) waiting for Kafka, and will use `docker exec gryphon-kafka` if the `kafka-topics` CLI isn't on your host.
 
+ESRS note:
+
+- The repository includes an ESRS PgStore adapter that optionally mirrors events from Kafka into Postgres tables for SQL-friendly projections and queries. The ESRS mirror is best-effort and tolerant of duplicate events; Kafka is still the primary store for event publishing.
+
+Operational implications:
+
+- Kafka is the authoritative, durable and replayable event log; the ESRS PgStore is an asynchronous, best-effort SQL-backed mirror intended for projections and read queries only. Expect eventual consistency and possible lag between Kafka and the PgStore. The mirror tolerates duplicate inserts and uses duplicate-key-tolerant persistence, so PgStore should not be relied on as the sole source of truth or for recovery—use Kafka as the canonical replay source when rebuilding projections or performing audits. Monitor mirror health (database errors, replication lag, and retry failures) and plan to replay from Kafka if you need a full, authoritative recovery.
+
 ## Configuration
 
 Edit `config.toml` to configure:
+
 - Kafka brokers and topics
 - PostgreSQL connection
 - Event store settings

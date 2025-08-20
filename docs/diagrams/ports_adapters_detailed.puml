@@ -22,6 +22,7 @@ package "Outbound Adapters" {
   component "FilesystemDataSource" as FS <<adapter>>
   component "PostgresGraphStore" as PG <<adapter>>
   component "KafkaAdapter" as KAFKA <<adapter>>
+  component "ESRS PgStore Adapter" as ESRS <<adapter>>
   component "FileLogger" as FILELOG <<adapter>>
   component "ConsoleLogger" as CONSLOG <<adapter>>
 }
@@ -42,11 +43,13 @@ PathPlanningService ..> LoggerPort : domain logging
 FS ..|> DataSourcePort
 PG ..|> GraphStorePort
 KAFKA ..|> EventStorePort
+ESRS ..|> EventStorePort
 FILELOG ..|> LoggerPort
 CONSLOG ..|> LoggerPort
 
 ' Infra wiring
 PG --> DB : stores graph bytes (table: graphs)
+ESRS --> DB : mirrors events into Postgres (esrs tables)
 FS --> ASSETS : reads/writes graph files (PGPH header)
 KAFKA --> [Kafka Cluster]
 
