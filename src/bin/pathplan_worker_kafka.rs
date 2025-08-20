@@ -7,14 +7,10 @@ use rdkafka::consumer::{Consumer, StreamConsumer};
 use rdkafka::{ClientConfig, Message};
 use std::sync::Arc;
 use std::time::Duration;
-#[cfg(feature = "esrs_migration")]
 use gryphon_app::adapters::inbound::esrs_pg_store::build_pg_store_with_bus;
-#[cfg(feature = "esrs_migration")]
 use gryphon_app::adapters::outbound::esrs_kafka_bus::KafkaEventBus;
-#[cfg(feature = "esrs_migration")]
 use gryphon_app::esrs::path_planning::PathPlanner as EsrsPathPlanner;
-#[cfg(feature = "esrs_migration")]
-// esrs EventStore trait is used via fully-qualified paths in this module; keep cfg but avoid unused import
+// esrs EventStore trait is used via fully-qualified paths in this module
 
 #[derive(Clone)]
 pub struct KafkaPathPlanWorker {
@@ -50,8 +46,7 @@ impl KafkaPathPlanWorker {
             .await?,
         );
 
-        #[cfg(feature = "esrs_migration")]
-        // Build a long-lived esrs PgStore to mirror published events
+    // Build a long-lived esrs PgStore to mirror published events
         let esrs_store = {
             let database_url = std::env::var("DATABASE_URL").unwrap_or_else(|_| "postgres://postgres:password@127.0.0.1:5432/gryphon_app".to_string());
             let kafka_brokers = std::env::var("KAFKA_BROKERS").unwrap_or_else(|_| "localhost:9092".to_string());
@@ -169,7 +164,6 @@ impl KafkaPathPlanWorker {
                                                 event_store
                                                     .append_events(&plan_id, 1, vec![completion_envelope.clone()])
                                                     .await?;
-                                                #[cfg(feature = "esrs_migration")]
                                                 if let Some(store) = &esrs_store {
                                                     if let Ok(evt) = serde_json::from_value::<PathPlanningEvent>(serde_json::to_value(&completion_event).unwrap()) {
                                                         let agg_uuid = gryphon_app::adapters::inbound::esrs_pg_store::uuid_for_aggregate_id(&self.planner_id);

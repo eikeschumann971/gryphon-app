@@ -9,14 +9,10 @@ use std::f64::consts::PI;
 use std::time::Instant;
 use tokio::time::Duration;
 use uuid::Uuid;
-#[cfg(feature = "esrs_migration")]
 use gryphon_app::adapters::inbound::esrs_pg_store::build_pg_store_with_bus;
-#[cfg(feature = "esrs_migration")]
 use gryphon_app::adapters::outbound::esrs_kafka_bus::KafkaEventBus;
-#[cfg(feature = "esrs_migration")]
 use gryphon_app::esrs::path_planning::PathPlanner as EsrsPathPlanner;
-#[cfg(feature = "esrs_migration")]
-// esrs EventStore trait is used via fully-qualified paths in this module; keep cfg but avoid unused import
+// esrs EventStore trait is used via fully-qualified paths in this module
 async fn run_kafka_client() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize combined logger (file + console fallback)
     let logger = gryphon_app::adapters::outbound::init_combined_logger("./domain.log");
@@ -26,7 +22,6 @@ async fn run_kafka_client() -> Result<(), Box<dyn std::error::Error>> {
     let event_store =
         KafkaEventStore::new("localhost:9092", "path-planning-events", "client-group").await?;
 
-    #[cfg(feature = "esrs_migration")]
     // Build a long-lived esrs PgStore wired to a KafkaEventBus, best-effort
     let esrs_store = {
         let database_url = std::env::var("DATABASE_URL").unwrap_or_else(|_| "postgres://postgres:password@127.0.0.1:5432/gryphon_app".to_string());
@@ -155,7 +150,6 @@ async fn run_kafka_client() -> Result<(), Box<dyn std::error::Error>> {
     event_store
         .append_events(&planner_id, 1, vec![event_envelope.clone()])
         .await?;
-    #[cfg(feature = "esrs_migration")]
     if let Some(store) = &esrs_store {
         if let Ok(evt) = serde_json::from_value::<gryphon_app::domains::path_planning::events::PathPlanningEvent>(serde_json::to_value(&event).unwrap()) {
             let agg_uuid = gryphon_app::adapters::inbound::esrs_pg_store::uuid_for_aggregate_id(&planner_id);

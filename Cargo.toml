@@ -55,8 +55,8 @@ ordered-float = "5.0.0"
 md5 = "0.7"
 
 # Event sourcing framework (esrs) and SQLx for Postgres persistence
-esrs = { version = "0.18", optional = true, features = ["postgres"] }
-sqlx = { version = "0.8", optional = true, features = ["postgres", "runtime-tokio-native-tls", "uuid", "json", "chrono"] }
+esrs = { version = "0.18", features = ["postgres"] }
+sqlx = { version = "0.8", features = ["postgres", "runtime-tokio-native-tls", "uuid", "json", "chrono"] }
 
 [dev-dependencies]
 testcontainers = "0.24"
@@ -70,37 +70,30 @@ path = "src/main.rs"
 [[bin]]
 name = "pathplan_worker"
 path = "src/bin/pathplan_worker/main.rs"
-required-features = ["esrs_migration"]
 
 [[bin]]
 name = "pathplan_planner"
 path = "src/bin/pathplan_planner.rs"
-required-features = ["esrs_migration"]
 
 [[bin]]
 name = "pathplan_client"
 path = "src/bin/pathplan_client.rs"
-required-features = ["esrs_migration"]
 
 [[bin]]
 name = "pathplan_planner_kafka"
 path = "src/bin/pathplan_planner_kafka.rs"
-required-features = ["esrs_migration"]
 
 [[bin]]
 name = "pathplan_planner_esrs"
 path = "src/bin/pathplan_planner_esrs.rs"
-required-features = ["esrs_migration"]
 
 [[bin]]
 name = "pathplan_client_kafka"
 path = "src/bin/pathplan_client_kafka.rs"
-required-features = ["esrs_migration"]
 
 [[bin]]
 name = "pathplan_worker_kafka"
 path = "src/bin/pathplan_worker_kafka.rs"
-required-features = ["esrs_migration"]
 
 
 [lib]
@@ -110,4 +103,3 @@ path = "src/lib.rs"
 [features]
 pg_integration = []
 use_testcontainers = []
-esrs_migration = ["esrs", "sqlx"]

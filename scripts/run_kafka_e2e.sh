@@ -23,7 +23,7 @@ PLANNER_PID_FILE="$OUT_DIR/planner.pid"
 WORKER_PID_FILE="$OUT_DIR/worker.pid"
 
 echo "Starting planner (background) -> logs: $PLANNER_LOG"
-nohup cargo run --bin pathplan_planner_kafka --features esrs_migration > "$PLANNER_LOG" 2>&1 &
+nohup cargo run --bin pathplan_planner_kafka > "$PLANNER_LOG" 2>&1 &
 PLANNER_PID=$!
 echo $PLANNER_PID > "$PLANNER_PID_FILE"
 
@@ -31,7 +31,7 @@ echo $PLANNER_PID > "$PLANNER_PID_FILE"
 sleep 2
 
 echo "Starting worker (background) -> logs: $WORKER_LOG"
-nohup cargo run --bin pathplan_worker_kafka --features esrs_migration > "$WORKER_LOG" 2>&1 &
+nohup cargo run --bin pathplan_worker_kafka > "$WORKER_LOG" 2>&1 &
 WORKER_PID=$!
 echo $WORKER_PID > "$WORKER_PID_FILE"
 
@@ -40,7 +40,7 @@ sleep 6
 
 echo "Running client (foreground) -> logs: $CLIENT_LOG"
 # Run client; it publishes PathPlanRequested and polls for responses
-cargo run --bin pathplan_client_kafka --features esrs_migration > "$CLIENT_LOG" 2>&1 || true
+cargo run --bin pathplan_client_kafka > "$CLIENT_LOG" 2>&1 || true
 
 # After client completes, capture topic contents to verify
 echo "Dumping topic messages to $TOPIC_LOG"

@@ -1,5 +1,4 @@
-#![cfg(all(test, feature = "esrs_migration"))]
-
+ 
 use super::path_planning::{PathPlanner, PathPlannerState, PathPlannerCommand};
 use crate::domains::path_planning::aggregate::types::{Position2D, Orientation2D, PlanningAlgorithm};
 

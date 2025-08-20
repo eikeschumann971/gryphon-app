@@ -9,16 +9,11 @@ use std::sync::Arc;
 use tokio::sync::mpsc;
 use tokio::time::{interval, Duration};
 use uuid::Uuid;
-#[cfg(feature = "esrs_migration")]
 use gryphon_app::adapters::inbound::esrs_pg_store::build_pg_store_with_bus;
-#[cfg(feature = "esrs_migration")]
 use gryphon_app::adapters::outbound::esrs_kafka_bus::KafkaEventBus;
-#[cfg(feature = "esrs_migration")]
 use esrs::store::postgres::PgStore;
-#[cfg(feature = "esrs_migration")]
 use gryphon_app::esrs::PathPlanner as EsrsPathPlanner;
-#[cfg(feature = "esrs_migration")]
-// esrs EventStore trait is used via fully-qualified paths in this module; keep cfg but avoid unused import
+// esrs EventStore trait is used via fully-qualified paths in this module; keep import
 
 #[derive(Debug, Clone)]
 pub struct WorkerInfo {
@@ -42,7 +37,6 @@ pub struct PathPlanningPlannerService {
     last_processed_version: HashMap<String, u64>,
     available_workers: HashMap<String, WorkerInfo>,
     logger: gryphon_app::domains::DynLogger,
-    #[cfg(feature = "esrs_migration")]
     #[allow(dead_code)]
     esrs_store: Option<PgStore<EsrsPathPlanner>>,
 }
@@ -62,11 +56,9 @@ impl PathPlanningPlannerService {
 
         logger.info("✅ Connected to Kafka event store for distributed event communication");
 
-        #[cfg(feature = "esrs_migration")]
-        logger.info("🔁 esrs migration feature enabled: will attempt to build PgStore + KafkaEventBus");
+    logger.info("🔁 esrs migration feature enabled: will attempt to build PgStore + KafkaEventBus");
 
-        #[cfg(feature = "esrs_migration")]
-        let esrs_store: Option<PgStore<EsrsPathPlanner>> = build_pg_store_with_bus::<EsrsPathPlanner, _>(
+    let esrs_store: Option<PgStore<EsrsPathPlanner>> = build_pg_store_with_bus::<EsrsPathPlanner, _>(
             &std::env::var("DATABASE_URL").unwrap_or_else(|_| "postgres://postgres:password@127.0.0.1:5432/gryphon_app".to_string()),
             KafkaEventBus::<EsrsPathPlanner>::new("localhost:9092", "path-planning-events"),
         )
@@ -94,7 +86,6 @@ impl PathPlanningPlannerService {
             last_processed_version: HashMap::new(),
             available_workers: HashMap::new(),
             logger,
-            #[cfg(feature = "esrs_migration")]
             esrs_store,
         })
     }
@@ -517,8 +508,7 @@ impl PathPlanningPlannerService {
         ));
 
         // Mirror event to esrs PgStore if the esrs migration feature is enabled and store exists
-        #[cfg(feature = "esrs_migration")]
-        if let Some(store) = &self.esrs_store {
+    if let Some(store) = &self.esrs_store {
             // Build an AggregateState for the esrs PathPlanner and persist the domain event
             use esrs::AggregateState;
             let mut agg_state = AggregateState::<gryphon_app::esrs::path_planning::PathPlannerState>::with_id(
@@ -626,7 +616,7 @@ impl PathPlanningPlannerService {
                     worker_id
                 ));
 
-                #[cfg(feature = "esrs_migration")]
+                
                 if let Some(store) = &self.esrs_store {
                     use esrs::AggregateState;
                     let mut agg_state = AggregateState::<gryphon_app::esrs::path_planning::PathPlannerState>::with_id(
