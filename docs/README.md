@@ -76,7 +76,9 @@ Provides user interface capabilities:
 2. **Create Kafka Topics:**
 
    ```bash
-   # Wait for Kafka to be ready, then create topics
+   # Wait for Kafka to be ready, then create topics. The script will retry up to 10 times
+   # (2s wait between attempts) and will try `docker exec gryphon-kafka` as a fallback
+   # if the kafka CLI isn't available on your host.
    ./scripts/kafka-setup.sh
    ```
 
