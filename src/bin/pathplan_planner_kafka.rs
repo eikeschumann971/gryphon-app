@@ -150,93 +150,7 @@ impl PathPlanningPlannerService {
         Ok(())
     }
 
-    async fn poll_and_process_kafka_events(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        // Use dedicated consumer for events with better offset management
-        let consumer: rdkafka::consumer::StreamConsumer = rdkafka::ClientConfig::new()
-            .set("group.id", "planner-requests-group")
-            .set("bootstrap.servers", "localhost:9092")
-            .set("enable.partition.eof", "false")
-            .set("session.timeout.ms", "6000")
-            .set("enable.auto.commit", "true")
-            .set("auto.offset.reset", "earliest") // Read from beginning to catch worker registrations
-            .create()
-            .map_err(|e| format!("Failed to create planner consumer: {}", e))?;
-
-        consumer
-            .subscribe(&["path-planning-events"])
-            .map_err(|e| format!("Failed to subscribe to events: {}", e))?;
-
-        // Poll for a longer time to process all available events including worker registrations
-        let timeout = Duration::from_millis(2000); // Increased from 100ms to 2 seconds
-        let start_time = std::time::Instant::now();
-
-        while start_time.elapsed() < timeout {
-            match tokio::time::timeout(Duration::from_millis(500), consumer.recv()).await {
-                Ok(Ok(message)) => {
-                    if let Some(payload) = message.payload() {
-                        let payload_str = String::from_utf8_lossy(payload);
-                        if let Ok(event_envelope) =
-                            serde_json::from_str::<EventEnvelope>(&payload_str)
-                        {
-                            // Process different event types
-                            match event_envelope.event_type.as_str() {
-                                "PathPlanRequested" => {
-                                    self.logger.info(&format!(
-                                        "📥 Found PathPlanRequested event from Kafka: {}",
-                                        event_envelope.aggregate_id
-                                    ));
-                                    if let Ok(event_data) =
-                                        serde_json::from_value::<PathPlanningEvent>(
-                                            event_envelope.event_data.clone(),
-                                        )
-                                    {
-                                        self.process_event(event_data).await?;
-                                    }
-                                }
-                                "WorkerRegistered" | "WorkerReady" | "WorkerHeartbeat"
-                                | "WorkerOffline" => {
-                                    self.logger.info(&format!(
-                                        "📥 Found worker event: {} from Kafka for aggregate {}",
-                                        event_envelope.event_type, event_envelope.aggregate_id
-                                    ));
-                                    if let Ok(event_data) =
-                                        serde_json::from_value::<PathPlanningEvent>(
-                                            event_envelope.event_data.clone(),
-                                        )
-                                    {
-                                        self.process_event(event_data).await?;
-                                    } else {
-                                        self.logger.warn("⚠️ Failed to deserialize worker event");
-                                    }
-                                }
-                                "PlanCompleted" => {
-                                    self.logger.info(&format!(
-                                        "📥 Found PlanCompleted event from Kafka for aggregate {}",
-                                        event_envelope.aggregate_id
-                                    ));
-                                    if let Ok(event_data) =
-                                        serde_json::from_value::<PathPlanningEvent>(
-                                            event_envelope.event_data.clone(),
-                                        )
-                                    {
-                                        self.process_event(event_data).await?;
-                                    } else {
-                                        self.logger.warn("⚠️ Failed to deserialize PlanCompleted event");
-                                    }
-                                }
-                                _ => {
-                                    // Ignore other events
-                                }
-                            }
-                        }
-                    }
-                }
-                _ => break,
-            }
-        }
-
-        Ok(())
-    }
+    
 
     async fn process_event(
         &mut self,
@@ -431,7 +345,7 @@ impl PathPlanningPlannerService {
                     // When assigning a plan, publish PlanAssigned to both main topic and replies
                     if let Some(worker_id) = self.find_available_worker() {
                         // preserve the incoming request's correlation id so the client can match replies
-                        let corr = envelope.metadata.correlation_id.clone();
+                        let corr = envelope.metadata.correlation_id;
                         let reply_envelope = self.build_plan_assigned_envelope(plan_id, &worker_id, corr)?;
                         // persist and publish to main topic
                         self.event_store.append_events(&reply_envelope.aggregate_id, 1, vec![reply_envelope.clone()]).await?;

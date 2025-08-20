@@ -131,7 +131,7 @@ impl KafkaPathPlanWorker {
 
                                                 let metadata = EventMetadata {
                                                     // Preserve correlation id from the PlanAssigned envelope so clients can match replies
-                                                    correlation_id: event.metadata.correlation_id.clone(),
+                                                    correlation_id: event.metadata.correlation_id,
                                                     causation_id: Some(event.event_id),
                                                     user_id: None,
                                                     source: "pathplan_worker_kafka".to_string(),

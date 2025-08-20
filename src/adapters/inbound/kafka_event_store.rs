@@ -130,7 +130,7 @@ impl EventStore for KafkaEventStore {
         let temp_consumer: StreamConsumer = ClientConfig::new()
             .set("bootstrap.servers", &self.bootstrap_servers)
             .set("group.id", &temp_group)
-            .set("client.id", &format!("gryphon-temp-consumer-{}", Uuid::new_v4()))
+            .set("client.id", format!("gryphon-temp-consumer-{}", Uuid::new_v4()))
             .set("enable.partition.eof", "false")
             .set("session.timeout.ms", "6000")
             .set("enable.auto.commit", "false")
