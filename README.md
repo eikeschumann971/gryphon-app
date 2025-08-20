@@ -36,10 +36,16 @@ A sophisticated multi-agent system built with Domain-Driven Design (DDD), Event 
    ```
 
    ```bash
-   # will run /tmp/kafka-setup.sh (the file is mounted into the container by docker-compose)
+   # Run the bundled kafka setup script. The script now retries up to 10 times (2s wait)
+   # while waiting for Kafka to become ready. It will also use `docker exec gryphon-kafka` 
+   # as a fallback if the kafka CLI is not available on your host.
+   bash scripts/kafka-setup.sh
+
+   # Alternatively, if you prefer running the script inside the container (mounted to /tmp):
    docker compose exec kafka bash -lc "/tmp/kafka-setup.sh"
    # or
    docker exec -it gryphon-kafka bash -lc "/tmp/kafka-setup.sh"
+
    # list topics (host)
    docker compose exec kafka bash -lc "kafka-topics --bootstrap-server localhost:9092 --list"
    ```
@@ -89,7 +95,7 @@ A sophisticated multi-agent system built with Domain-Driven Design (DDD), Event 
   - Other containers in the same compose can talk to Kafka at `kafka:29092`.
   - From your host (macOS) use `localhost:9092` (mapped in the compose file).
 - If the Kafka container fails to start, check `docker compose logs kafka` for errors about storage (meta.properties), permissions, or cluster id.
-- The compose mounts `kafka-setup.sh` — ensure that file is executable if you edit it locally.
+- The compose mounts `kafka-setup.sh` — ensure that file is executable if you edit it locally. The script will retry up to 10 times (2s each) waiting for Kafka, and will use `docker exec gryphon-kafka` if the `kafka-topics` CLI isn't on your host.
 
 ## Configuration
 
@@ -100,7 +106,7 @@ Edit `config.toml` to configure:
 
 ## Architecture
 
-```
+```text
 ├── src/
 │   ├── domains/           # Domain logic (aggregates, events, projections)
 │   ├── application/       # Application services
