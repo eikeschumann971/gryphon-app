@@ -52,8 +52,8 @@ geojson = "0.24.2"
 ordered-float = "5.0.0"
 
 # Event sourcing framework (esrs) and SQLx for Postgres persistence
-esrs = { version = "0.18" }
-sqlx = { version = "0.7", features = ["postgres", "runtime-tokio-native-tls", "uuid", "json", "chrono"] }
+esrs = { version = "0.18", optional = true }
+sqlx = { version = "0.7", optional = true, features = ["postgres", "runtime-tokio-native-tls", "uuid", "json", "chrono"] }
 
 [dev-dependencies]
 testcontainers = "0.24"
@@ -84,3 +84,4 @@ path = "src/lib.rs"
 [features]
 pg_integration = []
 use_testcontainers = []
+esrs_migration = ["esrs", "sqlx"]
