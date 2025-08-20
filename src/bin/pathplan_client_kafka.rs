@@ -3,6 +3,7 @@ use gryphon_app::adapters::inbound::kafka_event_store::KafkaEventStore;
 use gryphon_app::common::{DomainEvent, EventEnvelope, EventMetadata, EventStore};
 use gryphon_app::domains::path_planning::*;
 use std::f64::consts::PI;
+use std::time::Instant;
 use tokio::time::Duration;
 use rdkafka::consumer::Consumer;
 use rdkafka::Message;
@@ -35,11 +36,29 @@ async fn run_kafka_client() -> Result<(), Box<dyn std::error::Error>> {
         .map_err(|e| format!("Failed to subscribe to replies topic: {}", e))?;
 
     // Wait for assignment to complete so we don't miss replies produced
-    // immediately after publishing the request. Poll briefly until partitions
-    // are assigned or a short timeout elapses.
-    // Small delay to allow the consumer to subscribe and complete partition assignment
-    tokio::time::sleep(Duration::from_millis(300)).await;
-    logger.info("Reply consumer assigned (post-subscribe delay)");
+    // immediately after publishing the request. Poll `assignment()` until
+    // partitions are assigned or a short timeout elapses.
+    let assign_deadline = Instant::now() + Duration::from_secs(3);
+    loop {
+        match reply_consumer.assignment() {
+            Ok(tpl) => {
+                if tpl.count() > 0 {
+                    logger.info("Reply consumer partition assignment complete");
+                    break;
+                }
+            }
+            Err(e) => {
+                logger.warn(&format!("Failed to query consumer assignment: {}", e));
+            }
+        }
+
+        if Instant::now() > assign_deadline {
+            logger.warn("Timed out waiting for reply consumer partition assignment; proceeding anyway");
+            break;
+        }
+
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
 
     logger.info("Connected to Kafka event store for distributed event communication");
     logger.info("Path Planning Client is running");
