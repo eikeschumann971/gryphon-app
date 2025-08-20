@@ -1,3 +1,5 @@
+#![cfg(feature = "esrs_migration")]
+
 use testcontainers::runners::AsyncRunner;
 use testcontainers_modules::postgres::Postgres;
 use std::time::Duration;
