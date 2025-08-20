@@ -2,10 +2,12 @@ use chrono::Utc;
 use gryphon_app::adapters::inbound::kafka_event_store::KafkaEventStore;
 use gryphon_app::common::{DomainEvent, EventEnvelope, EventMetadata, EventStore};
 use gryphon_app::domains::path_planning::*;
-use std::f64::consts::PI;
-use tokio::time::Duration;
 use rdkafka::consumer::Consumer;
+use rdkafka::consumer::StreamConsumer;
 use rdkafka::Message;
+use std::f64::consts::PI;
+use std::time::Instant;
+use tokio::time::Duration;
 use uuid::Uuid;
 
 async fn run_kafka_client() -> Result<(), Box<dyn std::error::Error>> {
@@ -20,7 +22,7 @@ async fn run_kafka_client() -> Result<(), Box<dyn std::error::Error>> {
     // Create a dedicated consumer for replies with a unique group id and subscribe
     // to the shared replies topic before publishing the request so we don't miss replies.
     let reply_group = format!("client-{}", Uuid::new_v4());
-    let reply_consumer: rdkafka::consumer::StreamConsumer = rdkafka::config::ClientConfig::new()
+    let reply_consumer: StreamConsumer = rdkafka::config::ClientConfig::new()
         .set("group.id", &reply_group)
         .set("bootstrap.servers", "localhost:9092")
         .set("enable.partition.eof", "false")
@@ -35,11 +37,33 @@ async fn run_kafka_client() -> Result<(), Box<dyn std::error::Error>> {
         .map_err(|e| format!("Failed to subscribe to replies topic: {}", e))?;
 
     // Wait for assignment to complete so we don't miss replies produced
-    // immediately after publishing the request. Poll briefly until partitions
-    // are assigned or a short timeout elapses.
-    // Small delay to allow the consumer to subscribe and complete partition assignment
-    tokio::time::sleep(Duration::from_millis(300)).await;
-    logger.info("Reply consumer assigned (post-subscribe delay)");
+    // immediately after publishing the request. Drive the consumer by
+    // briefly polling and check `assignment()` until partitions are
+    // assigned or a short timeout elapses.
+    let assign_deadline = Instant::now() + Duration::from_secs(3);
+    loop {
+        match reply_consumer.assignment() {
+            Ok(tpl) => {
+                if tpl.count() > 0 {
+                    logger.info("Reply consumer partition assignment complete");
+                    break;
+                }
+            }
+            Err(e) => {
+                logger.warn(&format!("Failed to query consumer assignment: {}", e));
+            }
+        }
+
+        if Instant::now() > assign_deadline {
+            logger.warn(
+                "Timed out waiting for reply consumer partition assignment; proceeding anyway",
+            );
+            break;
+        }
+
+        // Sleep briefly to allow background assignment to settle
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
 
     logger.info("Connected to Kafka event store for distributed event communication");
     logger.info("Path Planning Client is running");
@@ -134,23 +158,49 @@ async fn run_kafka_client() -> Result<(), Box<dyn std::error::Error>> {
                         if envelope.metadata.correlation_id == correlation_to_match {
                             match envelope.event_type.as_str() {
                                 "PlanAssigned" => {
-                                    if let Ok(PathPlanningEvent::PlanAssigned { plan_id: assigned_plan_id, worker_id, .. }) = serde_json::from_value::<PathPlanningEvent>(envelope.event_data) {
+                                    if let Ok(PathPlanningEvent::PlanAssigned {
+                                        plan_id: assigned_plan_id,
+                                        worker_id,
+                                        ..
+                                    }) = serde_json::from_value::<PathPlanningEvent>(
+                                        envelope.event_data,
+                                    ) {
                                         if assigned_plan_id == plan_id {
-                                            logger.info(&format!("Received PlanAssigned for plan {} worker={}", assigned_plan_id, worker_id));
+                                            logger.info(&format!(
+                                                "Received PlanAssigned for plan {} worker={}",
+                                                assigned_plan_id, worker_id
+                                            ));
                                             assigned_found = true;
                                         }
                                     }
                                 }
                                 "PlanCompleted" => {
-                                    if let Ok(PathPlanningEvent::PlanCompleted { plan_id: completed_plan_id, waypoints, worker_id, .. }) = serde_json::from_value::<PathPlanningEvent>(envelope.event_data) {
+                                    if let Ok(PathPlanningEvent::PlanCompleted {
+                                        plan_id: completed_plan_id,
+                                        waypoints,
+                                        worker_id,
+                                        ..
+                                    }) = serde_json::from_value::<PathPlanningEvent>(
+                                        envelope.event_data,
+                                    ) {
                                         if completed_plan_id == plan_id {
                                             logger.info(&format!("Received PlanCompleted for plan {} waypoints={} worker={:?}", completed_plan_id, waypoints.len(), worker_id));
                                             println!("   📍 Sample waypoints from completed plan:");
-                                            for (idx, waypoint) in waypoints.iter().take(3).enumerate() {
-                                                println!("      {}. ({:.1}, {:.1})", idx + 1, waypoint.x, waypoint.y);
+                                            for (idx, waypoint) in
+                                                waypoints.iter().take(3).enumerate()
+                                            {
+                                                println!(
+                                                    "      {}. ({:.1}, {:.1})",
+                                                    idx + 1,
+                                                    waypoint.x,
+                                                    waypoint.y
+                                                );
                                             }
                                             if waypoints.len() > 3 {
-                                                println!("      ... and {} more waypoints", waypoints.len() - 3);
+                                                println!(
+                                                    "      ... and {} more waypoints",
+                                                    waypoints.len() - 3
+                                                );
                                             }
                                             completed_found = true;
                                         }
