@@ -1,0 +1,56 @@
+name: E2E / Kafka
+
+on:
+  push:
+    branches: [ main, feature/** ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services: {}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+
+      - name: Start services (Docker Compose)
+        run: |
+          docker compose up -d --build
+
+      - name: Wait for Kafka
+        run: |
+          set -e
+          echo "Waiting for Kafka container 'gryphon-kafka' to be ready..."
+          for i in {1..30}; do
+            if docker exec gryphon-kafka bash -lc "kafka-topics --bootstrap-server localhost:9092 --list" >/dev/null 2>&1; then
+              echo "Kafka is responding"
+              break
+            fi
+            sleep 2
+          done
+          docker ps --filter name=gryphon-kafka --filter status=running
+
+      - name: Create Kafka topics
+        run: bash scripts/kafka-setup.sh
+
+      - name: Build
+        run: cargo build --locked
+
+      - name: Run unit tests
+        run: cargo test --all --quiet
+
+      - name: Run clippy
+        run: cargo clippy --workspace -- -D warnings
+
+      - name: Run E2E script
+        env:
+          RUST_LOG: info
+        run: bash scripts/run_kafka_e2e.sh
