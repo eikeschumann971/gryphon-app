@@ -1,15 +1,15 @@
 use chrono::Utc;
+use gryphon_app::adapters::inbound::esrs_pg_store::build_pg_store_with_bus;
 use gryphon_app::adapters::inbound::kafka_event_store::KafkaEventStore;
+use gryphon_app::adapters::outbound::esrs_kafka_bus::KafkaEventBus;
 use gryphon_app::common::{EventEnvelope, EventMetadata, EventStore};
 use gryphon_app::domains::path_planning::*;
 use gryphon_app::domains::DynLogger;
+use gryphon_app::esrs::path_planning::PathPlanner as EsrsPathPlanner;
 use rdkafka::consumer::{Consumer, StreamConsumer};
 use rdkafka::{ClientConfig, Message};
 use std::sync::Arc;
 use std::time::Duration;
-use gryphon_app::adapters::inbound::esrs_pg_store::build_pg_store_with_bus;
-use gryphon_app::adapters::outbound::esrs_kafka_bus::KafkaEventBus;
-use gryphon_app::esrs::path_planning::PathPlanner as EsrsPathPlanner;
 // esrs EventStore trait is used via fully-qualified paths in this module
 
 #[derive(Clone)]
@@ -46,14 +46,25 @@ impl KafkaPathPlanWorker {
             .await?,
         );
 
-    // Build a long-lived esrs PgStore to mirror published events
+        // Build a long-lived esrs PgStore to mirror published events
         let esrs_store = {
-            let database_url = std::env::var("DATABASE_URL").unwrap_or_else(|_| "postgres://postgres:password@127.0.0.1:5432/gryphon_app".to_string());
-            let kafka_brokers = std::env::var("KAFKA_BROKERS").unwrap_or_else(|_| "localhost:9092".to_string());
-            match build_pg_store_with_bus::<EsrsPathPlanner, _>(&database_url, KafkaEventBus::<EsrsPathPlanner>::new(&kafka_brokers, "path-planning-events")).await {
+            let database_url = std::env::var("DATABASE_URL").unwrap_or_else(|_| {
+                "postgres://postgres:password@127.0.0.1:5432/gryphon_app".to_string()
+            });
+            let kafka_brokers =
+                std::env::var("KAFKA_BROKERS").unwrap_or_else(|_| "localhost:9092".to_string());
+            match build_pg_store_with_bus::<EsrsPathPlanner, _>(
+                &database_url,
+                KafkaEventBus::<EsrsPathPlanner>::new(&kafka_brokers, "path-planning-events"),
+            )
+            .await
+            {
                 Ok(s) => Some(Arc::new(s)),
                 Err(e) => {
-                    self.logger.warn(&format!("Failed to build esrs PgStore for worker mirroring: {}", e));
+                    self.logger.warn(&format!(
+                        "Failed to build esrs PgStore for worker mirroring: {}",
+                        e
+                    ));
                     None
                 }
             }

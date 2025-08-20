@@ -2,9 +2,9 @@ use esrs::bus::EventBus;
 use esrs::store::StoreEvent;
 use rdkafka::config::ClientConfig;
 use rdkafka::producer::{FutureProducer, FutureRecord};
-use std::time::Duration;
-use std::sync::{Arc, Mutex};
 use std::marker::PhantomData;
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 pub struct KafkaEventBus<A> {
     producer: FutureProducer,
@@ -19,7 +19,11 @@ impl<A> KafkaEventBus<A> {
             .set("client.id", "esrs-kafka-bus")
             .create()
             .expect("Failed to create Kafka producer");
-        Self { producer, topic: topic.to_string(), _marker: PhantomData }
+        Self {
+            producer,
+            topic: topic.to_string(),
+            _marker: PhantomData,
+        }
     }
 }
 
@@ -39,7 +43,10 @@ where
     A::Event: Clone,
 {
     pub fn new() -> Self {
-        Self { published: Arc::new(Mutex::new(Vec::new())), _marker: PhantomData }
+        Self {
+            published: Arc::new(Mutex::new(Vec::new())),
+            _marker: PhantomData,
+        }
     }
 }
 
@@ -60,7 +67,10 @@ where
     A::Event: Clone,
 {
     fn clone(&self) -> Self {
-        Self { published: Arc::clone(&self.published), _marker: PhantomData }
+        Self {
+            published: Arc::clone(&self.published),
+            _marker: PhantomData,
+        }
     }
 }
 
@@ -95,9 +105,7 @@ where
         let payload = serde_json::to_string(store_event).unwrap_or_default();
         // use string forms for payload and key
         let key = store_event.aggregate_id.to_string();
-        let record = FutureRecord::to(&self.topic)
-            .payload(&payload)
-            .key(&key);
+        let record = FutureRecord::to(&self.topic).payload(&payload).key(&key);
         let _ = self.producer.send(record, Duration::from_secs(5)).await;
     }
 }

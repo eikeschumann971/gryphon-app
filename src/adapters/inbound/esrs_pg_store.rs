@@ -1,6 +1,6 @@
-use esrs::store::postgres::PgStoreBuilder;
-use esrs::store::postgres::PgStore;
 use esrs::bus::EventBus;
+use esrs::store::postgres::PgStore;
+use esrs::store::postgres::PgStoreBuilder;
 use sqlx::postgres::PgPoolOptions;
 
 /// Build a PgStore for a specific event type T and attach an EventBus.
@@ -8,7 +8,8 @@ use sqlx::postgres::PgPoolOptions;
 pub async fn build_pg_store_with_bus<A, B>(database_url: &str, bus: B) -> anyhow::Result<PgStore<A>>
 where
     A: esrs::Aggregate,
-    A::Event: serde::Serialize + for<'de> serde::de::Deserialize<'de> + Send + Sync + 'static + Clone,
+    A::Event:
+        serde::Serialize + for<'de> serde::de::Deserialize<'de> + Send + Sync + 'static + Clone,
     B: EventBus<A> + Send + Sync + 'static,
 {
     let pool = PgPoolOptions::new()
@@ -51,7 +52,10 @@ pub fn uuid_for_aggregate_id(id: &str) -> uuid::Uuid {
 /// Returns Ok(Some(n)) if found, Ok(None) if no events exist, or Err on DB error.
 pub async fn agg_last_sequence(agg_uuid: &uuid::Uuid) -> anyhow::Result<Option<i64>> {
     let database_url = std::env::var("DATABASE_URL").map_err(|e| anyhow::anyhow!(e.to_string()))?;
-    let pool = PgPoolOptions::new().max_connections(1).connect(&database_url).await?;
+    let pool = PgPoolOptions::new()
+        .max_connections(1)
+        .connect(&database_url)
+        .await?;
 
     let row = sqlx::query_as::<_, (Option<i64>,)>(
         "SELECT max(sequence_number) FROM path_planner_events WHERE aggregate_id = $1",
@@ -86,7 +90,11 @@ where
     // handling behavior.
     if let Ok(database_url) = std::env::var("DATABASE_URL") {
         // Try to connect with a small pool for the pre-check
-        match PgPoolOptions::new().max_connections(1).connect(&database_url).await {
+        match PgPoolOptions::new()
+            .max_connections(1)
+            .connect(&database_url)
+            .await
+        {
             Ok(pool) => {
                 // Use the aggregate id from the provided agg_state to scope the query
                 // `id()` returns a Uuid which is Copy; avoid clone_on_copy lint.
@@ -129,7 +137,10 @@ where
                 }
             }
             Err(e) => {
-                println!("⚠️ esrs pre-check DB connection failed: {}. Falling back to persist.", e);
+                println!(
+                    "⚠️ esrs pre-check DB connection failed: {}. Falling back to persist.",
+                    e
+                );
             }
         }
     }

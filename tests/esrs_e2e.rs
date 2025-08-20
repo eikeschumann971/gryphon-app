@@ -1,14 +1,13 @@
- 
-use testcontainers::runners::AsyncRunner;
-use testcontainers_modules::postgres::Postgres;
-use std::time::Duration;
-use esrs::Aggregate;
 use esrs::store::EventStore as EsrsEventStore;
+use esrs::Aggregate;
 use esrs::AggregateState;
 use gryphon_app::adapters::inbound::esrs_pg_store::build_pg_store_with_bus;
 use gryphon_app::adapters::outbound::esrs_kafka_bus::InMemoryBus;
 use gryphon_app::esrs::path_planning::PathPlanner;
 use gryphon_app::esrs::path_planning::PathPlannerState;
+use std::time::Duration;
+use testcontainers::runners::AsyncRunner;
+use testcontainers_modules::postgres::Postgres;
 
 #[tokio::test]
 async fn esrs_pgstore_and_bus_end_to_end() {
@@ -56,22 +55,36 @@ async fn esrs_pgstore_and_bus_end_to_end() {
         .expect("connect to pg");
 
     // Inspect pg_tables to find candidate event tables created by the PgStore migrations
-    let table_names: Vec<(String,)> = sqlx::query_as("SELECT tablename FROM pg_tables WHERE schemaname = 'public'")
-        .fetch_all(&pool)
-        .await
-        .expect("fetch table names");
+    let table_names: Vec<(String,)> =
+        sqlx::query_as("SELECT tablename FROM pg_tables WHERE schemaname = 'public'")
+            .fetch_all(&pool)
+            .await
+            .expect("fetch table names");
 
     // Collect names and look for likely event table candidates
     let names: Vec<String> = table_names.into_iter().map(|t| t.0).collect();
-    let candidate = names.iter().find(|n| n.contains("esrs") || n.contains("event") || n.contains("events")).cloned();
+    let candidate = names
+        .iter()
+        .find(|n| n.contains("esrs") || n.contains("event") || n.contains("events"))
+        .cloned();
 
     let table = match candidate {
         Some(t) => t,
-        None => panic!("no candidate event table found in Postgres; tables: {:?}", names),
+        None => panic!(
+            "no candidate event table found in Postgres; tables: {:?}",
+            names
+        ),
     };
 
     // Count rows in the discovered table
     let query = format!("SELECT COUNT(*) FROM {}", table);
-    let count: i64 = sqlx::query_scalar(&query).fetch_one(&pool).await.expect("count rows");
-    assert!(count > 0, "no rows found in detected events table {}", table);
+    let count: i64 = sqlx::query_scalar(&query)
+        .fetch_one(&pool)
+        .await
+        .expect("count rows");
+    assert!(
+        count > 0,
+        "no rows found in detected events table {}",
+        table
+    );
 }

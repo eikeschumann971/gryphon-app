@@ -1,11 +1,10 @@
- 
 use std::env;
 use std::time::Duration;
 
 use anyhow::Context;
+use esrs::store::EventStore;
 use esrs::Aggregate;
 use esrs::AggregateState;
-use esrs::store::EventStore;
 use uuid::Uuid;
 
 use gryphon_app::adapters::inbound::esrs_pg_store::build_pg_store_with_bus;
@@ -20,7 +19,10 @@ async fn main() -> anyhow::Result<()> {
     let kafka_brokers = env::var("KAFKA_BROKERS").unwrap_or_else(|_| "localhost:9092".to_string());
     let topic = env::var("EVENT_TOPIC").unwrap_or_else(|_| "path-planning-events".to_string());
 
-    println!("🔌 Building PgStore (Postgres) + KafkaEventBus ({} -> {})", kafka_brokers, topic);
+    println!(
+        "🔌 Building PgStore (Postgres) + KafkaEventBus ({} -> {})",
+        kafka_brokers, topic
+    );
 
     // Create a KafkaEventBus and wire it into a PgStore for the PathPlanner aggregate
     let kafka_bus = KafkaEventBus::<PathPlanner>::new(&kafka_brokers, &topic);
@@ -38,10 +40,17 @@ async fn main() -> anyhow::Result<()> {
         algorithm: gryphon_app::domains::path_planning::aggregate::types::PlanningAlgorithm::AStar,
     };
 
-    let events = PathPlanner::handle_command(agg_state.inner(), cmd).context("handle command failed")?;
-    store.persist(&mut agg_state, events).await.context("persist failed")?;
+    let events =
+        PathPlanner::handle_command(agg_state.inner(), cmd).context("handle command failed")?;
+    store
+        .persist(&mut agg_state, events)
+        .await
+        .context("persist failed")?;
 
-    println!("📥 Persisted CreatePlanner event for aggregate {}", agg_state.id());
+    println!(
+        "📥 Persisted CreatePlanner event for aggregate {}",
+        agg_state.id()
+    );
 
     // give the async bus a moment to publish
     tokio::time::sleep(Duration::from_secs(1)).await;
