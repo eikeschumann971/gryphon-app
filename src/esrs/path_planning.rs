@@ -1,4 +1,4 @@
-use esrs::aggregate::Aggregate;
+use esrs::Aggregate;
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 
@@ -9,7 +9,7 @@ use crate::domains::path_planning::aggregate::plan::PathPlan;
 use crate::domains::path_planning::aggregate::worker::{PathPlanWorker, PlanAssignment};
 use crate::domains::path_planning::aggregate::workspace::Workspace;
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PathPlannerState {
     pub id: String,
     pub algorithm: PlanningAlgorithm,
@@ -18,6 +18,20 @@ pub struct PathPlannerState {
     pub registered_workers: Vec<PathPlanWorker>,
     pub plan_assignments: Vec<PlanAssignment>,
     pub version: u64,
+}
+
+impl Default for PathPlannerState {
+    fn default() -> Self {
+        PathPlannerState {
+            id: String::new(),
+            algorithm: PlanningAlgorithm::AStar,
+            workspace: Workspace { bounds: crate::domains::path_planning::aggregate::workspace::WorkspaceBounds { min_x: 0.0, max_x: 0.0, min_y: 0.0, max_y: 0.0 }, obstacles: Vec::new() },
+            active_plans: Vec::new(),
+            registered_workers: Vec::new(),
+            plan_assignments: Vec::new(),
+            version: 0,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

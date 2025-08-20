@@ -5,6 +5,7 @@ pub mod application;
 pub mod common;
 pub mod config;
 pub mod domains;
+pub mod esrs;
 
 pub use config::Config;
 

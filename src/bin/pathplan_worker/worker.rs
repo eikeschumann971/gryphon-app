@@ -9,6 +9,14 @@ use std::time::Duration;
 use tokio::time::sleep;
 #[allow(unused_imports)]
 use uuid::Uuid;
+#[cfg(feature = "esrs_migration")]
+use gryphon_app::adapters::inbound::esrs_pg_store::build_pg_store_with_bus;
+#[cfg(feature = "esrs_migration")]
+use gryphon_app::adapters::outbound::esrs_kafka_bus::KafkaEventBus;
+#[cfg(feature = "esrs_migration")]
+use gryphon_app::esrs::path_planning::PathPlanner as EsrsPathPlanner;
+#[cfg(feature = "esrs_migration")]
+use esrs::store::EventStore as EsrsEventStore;
 
 #[derive(Clone)]
 pub struct AStarPathPlanWorker {
@@ -200,8 +208,22 @@ impl AStarPathPlanWorker {
                                     EventEnvelope::new(&completion_event, "PathPlan", metadata)?;
 
                                 event_store
-                                    .append_events(&plan_id, 1, vec![completion_envelope])
+                                    .append_events(&plan_id, 1, vec![completion_envelope.clone()])
                                     .await?;
+                                #[cfg(feature = "esrs_migration")]
+                                {
+                                    // Mirror to esrs PgStore best-effort
+                                    let database_url = std::env::var("DATABASE_URL").unwrap_or_else(|_| "postgres://postgres:password@127.0.0.1:5432/gryphon_app".to_string());
+                                    let kafka_brokers = std::env::var("KAFKA_BROKERS").unwrap_or_else(|_| "localhost:9092".to_string());
+                                    let topic = "path-planning-events";
+                                    if let Ok(store) = build_pg_store_with_bus::<EsrsPathPlanner, _>(&database_url, KafkaEventBus::<EsrsPathPlanner>::new(&kafka_brokers, topic)).await {
+                                        if let Ok(evt) = serde_json::from_value::<PathPlanningEvent>(serde_json::to_value(&completion_event).unwrap()) {
+                                            use esrs::AggregateState;
+                                            let mut agg_state = esrs::AggregateState::<gryphon_app::esrs::path_planning::PathPlannerState>::with_id(gryphon_app::adapters::inbound::esrs_pg_store::uuid_for_aggregate_id(&self.planner_id));
+                                            let _ = EsrsEventStore::persist(&store, &mut agg_state, vec![evt]).await;
+                                        }
+                                    }
+                                }
                                 println!("   📤 Published PlanCompleted event");
                                 self.logger.info(&format!(
                                     "Published PlanCompleted event for plan {}",
