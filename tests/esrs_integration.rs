@@ -3,7 +3,6 @@
 use testcontainers::runners::AsyncRunner;
 use testcontainers_modules::postgres::Postgres;
 use std::time::Duration;
-use esrs::store::StoreEvent;
 use esrs::Aggregate;
 use esrs::store::EventStore;
 use gryphon_app::adapters::inbound::esrs_pg_store::build_pg_store_with_bus;

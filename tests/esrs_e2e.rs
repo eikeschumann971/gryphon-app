@@ -42,9 +42,12 @@ async fn esrs_pgstore_and_bus_end_to_end() {
     // Allow background bus handlers to run
     tokio::time::sleep(Duration::from_millis(300)).await;
 
-    // Assert that the in-memory bus got at least one published event
-    let lock = bus.published.lock().unwrap();
-    assert!(!lock.is_empty(), "no events published to in-memory bus");
+    // Assert that the in-memory bus got at least one published event.
+    // Scope the mutex guard so it is dropped before any subsequent `.await` calls.
+    {
+        let lock = bus.published.lock().unwrap();
+        assert!(!lock.is_empty(), "no events published to in-memory bus");
+    }
 
     // Also assert that Postgres contains events for esrs
     let pool = sqlx::postgres::PgPoolOptions::new()
