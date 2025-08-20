@@ -18,7 +18,7 @@ use esrs::store::postgres::PgStore;
 #[cfg(feature = "esrs_migration")]
 use gryphon_app::esrs::PathPlanner as EsrsPathPlanner;
 #[cfg(feature = "esrs_migration")]
-use esrs::store::EventStore as EsrsEventStore;
+// esrs EventStore trait is used via fully-qualified paths in this module; keep cfg but avoid unused import
 
 #[derive(Debug, Clone)]
 pub struct WorkerInfo {
@@ -522,13 +522,20 @@ impl PathPlanningPlannerService {
             // Build an AggregateState for the esrs PathPlanner and persist the domain event
             use esrs::AggregateState;
             let mut agg_state = AggregateState::<gryphon_app::esrs::path_planning::PathPlannerState>::with_id(
-                gryphon_app::adapters::inbound::esrs_pg_store::uuid_for_aggregate_id(&planner_id),
+                gryphon_app::adapters::inbound::esrs_pg_store::uuid_for_aggregate_id(planner_id),
             );
             // Deserialize the domain event and persist via esrs store
-            if let Ok(evt) = serde_json::from_value::<gryphon_app::domains::path_planning::events::PathPlanningEvent>(serde_json::to_value(&event).unwrap()) {
+                if let Ok(evt) = serde_json::from_value::<gryphon_app::domains::path_planning::events::PathPlanningEvent>(serde_json::to_value(&event).unwrap()) {
                 let events = vec![evt];
-                // Call the EsrsEventStore::persist method
-                let _ = EsrsEventStore::persist(store, &mut agg_state, events).await;
+                let agg_uuid = gryphon_app::adapters::inbound::esrs_pg_store::uuid_for_aggregate_id(planner_id);
+                match gryphon_app::adapters::inbound::esrs_pg_store::agg_last_sequence(&agg_uuid).await {
+                    Ok(Some(n)) if n >= 1_i64 => {
+                        println!("⤴️ esrs pre-check: event already present for agg {} (seq={}), skipping persist", agg_uuid, n);
+                    }
+                    _ => {
+                        let _ = gryphon_app::adapters::inbound::esrs_pg_store::persist_best_effort(store, &mut agg_state, events).await;
+                    }
+                }
             }
         }
 
@@ -626,7 +633,15 @@ impl PathPlanningPlannerService {
                         gryphon_app::adapters::inbound::esrs_pg_store::uuid_for_aggregate_id("main-path-planner"),
                     );
                     if let Ok(evt) = serde_json::from_value::<gryphon_app::domains::path_planning::events::PathPlanningEvent>(serde_json::to_value(&offline_event).unwrap()) {
-                        let _ = EsrsEventStore::persist(store, &mut agg_state, vec![evt]).await;
+                            let agg_uuid = gryphon_app::adapters::inbound::esrs_pg_store::uuid_for_aggregate_id("main-path-planner");
+                            match gryphon_app::adapters::inbound::esrs_pg_store::agg_last_sequence(&agg_uuid).await {
+                                Ok(Some(n)) if n >= 1_i64 => {
+                                    println!("⤴️ esrs pre-check: worker offline event already present for agg {} (seq={}), skipping persist", agg_uuid, n);
+                                }
+                                _ => {
+                                    let _ = gryphon_app::adapters::inbound::esrs_pg_store::persist_best_effort(store, &mut agg_state, vec![evt]).await;
+                                }
+                            }
                     }
                 }
             }

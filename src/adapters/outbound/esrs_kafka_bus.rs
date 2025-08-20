@@ -1,5 +1,3 @@
-#![cfg(feature = "esrs_migration")]
-
 use esrs::bus::EventBus;
 use esrs::store::StoreEvent;
 use rdkafka::config::ClientConfig;
@@ -42,6 +40,16 @@ where
 {
     pub fn new() -> Self {
         Self { published: Arc::new(Mutex::new(Vec::new())), _marker: PhantomData }
+    }
+}
+
+impl<A> Default for InMemoryBus<A>
+where
+    A: esrs::Aggregate,
+    A::Event: Clone,
+{
+    fn default() -> Self {
+        Self::new()
     }
 }
 

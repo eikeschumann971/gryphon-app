@@ -15,7 +15,7 @@ use gryphon_app::adapters::outbound::esrs_kafka_bus::KafkaEventBus;
 #[cfg(feature = "esrs_migration")]
 use gryphon_app::esrs::path_planning::PathPlanner as EsrsPathPlanner;
 #[cfg(feature = "esrs_migration")]
-use esrs::store::EventStore as EsrsEventStore;
+// esrs EventStore trait is used via fully-qualified paths in this module; keep cfg but avoid unused import
 
 /// Path Planning Planner Process (Event-Driven)
 ///
@@ -47,6 +47,8 @@ pub struct PathPlannerService {
     last_processed_version: HashMap<String, u64>,
     available_workers: HashMap<String, WorkerInfo>,
     logger: DynLogger,
+    #[cfg(feature = "esrs_migration")]
+    esrs_store: Option<esrs::store::postgres::PgStore<EsrsPathPlanner>>,
 }
 
 #[derive(Debug, Clone)]
@@ -116,13 +118,16 @@ impl PathPlannerService {
         let event_store: Arc<dyn EventStore> = Arc::new(FileEventStore::new("/tmp/gryphon-events"));
         println!("✅ Using file-based event store for demo (shared between processes)");
 
-        let mut planners = HashMap::new();
-        let planner_id = "main-path-planner".to_string();
+    let mut planners = HashMap::new();
+    let planner_id = "main-path-planner".to_string();
 
-        // Try to restore planner state from event store
+    // We may create a new planner during initialization — capture its creation event for later mirroring
+    let mut creation_event_opt: Option<PathPlanningEvent> = None;
+
+    // Try to restore planner state from event store
         match event_store.load_events(&planner_id, 0).await {
             Ok(events) => {
-                if events.is_empty() {
+            if events.is_empty() {
                     // No existing events, create new planner and persist creation event
                     let planner = PathPlanner::new(planner_id.clone(), PlanningAlgorithm::AStar);
 
@@ -151,18 +156,8 @@ impl PathPlannerService {
                     event_store
                         .append_events(&planner_id, 0, vec![event_envelope])
                         .await?;
-                    #[cfg(feature = "esrs_migration")]
-                    {
-                        let database_url = std::env::var("DATABASE_URL").unwrap_or_else(|_| "postgres://postgres:password@127.0.0.1:5432/gryphon_app".to_string());
-                        let kafka_brokers = std::env::var("KAFKA_BROKERS").unwrap_or_else(|_| "localhost:9092".to_string());
-                        if let Ok(store) = build_pg_store_with_bus::<EsrsPathPlanner, _>(&database_url, KafkaEventBus::<EsrsPathPlanner>::new(&kafka_brokers, "path-planning-events")).await {
-                            if let Ok(evt) = serde_json::from_value::<PathPlanningEvent>(serde_json::to_value(&creation_event).unwrap()) {
-                                use esrs::AggregateState;
-                                let mut agg_state = esrs::AggregateState::<gryphon_app::esrs::path_planning::PathPlannerState>::with_id(gryphon_app::adapters::inbound::esrs_pg_store::uuid_for_aggregate_id(&planner_id));
-                                let _ = EsrsEventStore::persist(&store, &mut agg_state, vec![evt]).await;
-                            }
-                        }
-                    }
+                    // capture for later mirroring once esrs_store is available
+                    creation_event_opt = Some(creation_event.clone());
                     planners.insert(planner_id.clone(), planner);
                     println!(
                         "✅ Created new PathPlanner with A* algorithm and persisted creation event"
@@ -182,12 +177,45 @@ impl PathPlannerService {
             }
         }
 
+        #[cfg(feature = "esrs_migration")]
+        let esrs_store = {
+            let database_url = std::env::var("DATABASE_URL").unwrap_or_else(|_| "postgres://postgres:password@127.0.0.1:5432/gryphon_app".to_string());
+            let kafka_brokers = std::env::var("KAFKA_BROKERS").unwrap_or_else(|_| "localhost:9092".to_string());
+            match build_pg_store_with_bus::<EsrsPathPlanner, _>(&database_url, KafkaEventBus::<EsrsPathPlanner>::new(&kafka_brokers, "path-planning-events")).await {
+                Ok(s) => Some(s),
+                Err(e) => {
+                    logger.warn(&format!("Failed to build esrs PgStore for planner mirroring: {}", e));
+                    None
+                }
+            }
+        };
+
+        // If we created a planner above and we have an esrs_store, persist the creation event into esrs
+        #[cfg(feature = "esrs_migration")]
+        if let (Some(store), Some(evt)) = (esrs_store.as_ref(), creation_event_opt) {
+            if let Ok(evt_parsed) = serde_json::from_value::<PathPlanningEvent>(serde_json::to_value(&evt).unwrap()) {
+                let agg_uuid = gryphon_app::adapters::inbound::esrs_pg_store::uuid_for_aggregate_id(&planner_id);
+                // Try to fetch last sequence to avoid duplicate inserts
+                let mut agg_state = esrs::AggregateState::<gryphon_app::esrs::path_planning::PathPlannerState>::with_id(agg_uuid);
+                match gryphon_app::adapters::inbound::esrs_pg_store::agg_last_sequence(&agg_uuid).await {
+                    Ok(Some(n)) if n >= 1 => {
+                        println!("⤴️ esrs pre-check: planner creation event already present (seq={}), skipping persist", n);
+                    }
+                    _ => {
+                        let _ = gryphon_app::adapters::inbound::esrs_pg_store::persist_best_effort(store, &mut agg_state, vec![evt_parsed]).await;
+                    }
+                }
+            }
+        }
+
         Ok(Self {
             planners,
             event_store,
             last_processed_version: HashMap::new(),
             available_workers: HashMap::new(),
             logger,
+            #[cfg(feature = "esrs_migration")]
+            esrs_store,
         })
     }
 
@@ -475,16 +503,21 @@ impl PathPlannerService {
             .await?;
                 #[cfg(feature = "esrs_migration")]
                 {
-                    // Best-effort mirror for other appended events in runtime
-                    let database_url = std::env::var("DATABASE_URL").unwrap_or_else(|_| "postgres://postgres:password@127.0.0.1:5432/gryphon_app".to_string());
-                    let kafka_brokers = std::env::var("KAFKA_BROKERS").unwrap_or_else(|_| "localhost:9092".to_string());
-                    if let Ok(store) = build_pg_store_with_bus::<EsrsPathPlanner, _>(&database_url, KafkaEventBus::<EsrsPathPlanner>::new(&kafka_brokers, "path-planning-events")).await {
-                        if let Ok(evt) = serde_json::from_value::<PathPlanningEvent>(serde_json::to_value(&event_envelope.event_data).unwrap()) {
-                            use esrs::AggregateState;
-                            let mut agg_state = esrs::AggregateState::<gryphon_app::esrs::path_planning::PathPlannerState>::with_id(gryphon_app::adapters::inbound::esrs_pg_store::uuid_for_aggregate_id(&planner_id));
-                            let _ = EsrsEventStore::persist(&store, &mut agg_state, vec![evt]).await;
+                    // Best-effort mirror for other appended events in runtime using the long-lived store
+                    if let Some(store) = self.esrs_store.as_ref() {
+                            if let Ok(evt) = serde_json::from_value::<PathPlanningEvent>(serde_json::to_value(&event_envelope.event_data).unwrap()) {
+                                let agg_uuid = gryphon_app::adapters::inbound::esrs_pg_store::uuid_for_aggregate_id(planner_id);
+                                let mut agg_state = esrs::AggregateState::<gryphon_app::esrs::path_planning::PathPlannerState>::with_id(agg_uuid);
+                                match gryphon_app::adapters::inbound::esrs_pg_store::agg_last_sequence(&agg_uuid).await {
+                                    Ok(Some(n)) if n >= (event_envelope.event_version as i64) => {
+                                        println!("⤴️ esrs pre-check: event with version {} already present for agg {} (seq={}), skipping persist", event_envelope.event_version, agg_uuid, n);
+                                    }
+                                    _ => {
+                                        let _ = gryphon_app::adapters::inbound::esrs_pg_store::persist_best_effort(store, &mut agg_state, vec![evt]).await;
+                                    }
+                                }
+                            }
                         }
-                    }
                 }
 
         println!(
