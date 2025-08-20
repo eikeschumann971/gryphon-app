@@ -207,8 +207,10 @@ impl PathPlannerService {
                 let mut agg_state = esrs::AggregateState::<
                     gryphon_app::esrs::path_planning::PathPlannerState,
                 >::with_id(agg_uuid);
-                match gryphon_app::adapters::inbound::esrs_pg_store::agg_last_sequence(&agg_uuid)
-                    .await
+                match gryphon_app::adapters::inbound::esrs_pg_store::agg_last_sequence_for::<
+                    gryphon_app::esrs::path_planning::PathPlanner,
+                >(&agg_uuid)
+                .await
                 {
                     Ok(Some(n)) if n >= 1 => {
                         println!("⤴️ esrs pre-check: planner creation event already present (seq={}), skipping persist", n);
@@ -528,8 +530,10 @@ impl PathPlannerService {
                 let mut agg_state = esrs::AggregateState::<
                     gryphon_app::esrs::path_planning::PathPlannerState,
                 >::with_id(agg_uuid);
-                match gryphon_app::adapters::inbound::esrs_pg_store::agg_last_sequence(&agg_uuid)
-                    .await
+                match gryphon_app::adapters::inbound::esrs_pg_store::agg_last_sequence_for::<
+                    gryphon_app::esrs::path_planning::PathPlanner,
+                >(&agg_uuid)
+                .await
                 {
                     Ok(Some(n)) if n >= (event_envelope.event_version as i64) => {
                         println!("⤴️ esrs pre-check: event with version {} already present for agg {} (seq={}), skipping persist", event_envelope.event_version, agg_uuid, n);

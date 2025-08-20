@@ -179,7 +179,9 @@ impl KafkaPathPlanWorker {
                                                     if let Ok(evt) = serde_json::from_value::<PathPlanningEvent>(serde_json::to_value(&completion_event).unwrap()) {
                                                         let agg_uuid = gryphon_app::adapters::inbound::esrs_pg_store::uuid_for_aggregate_id(&self.planner_id);
                                                         let mut agg_state = esrs::AggregateState::<gryphon_app::esrs::path_planning::PathPlannerState>::with_id(agg_uuid);
-                                                        match gryphon_app::adapters::inbound::esrs_pg_store::agg_last_sequence(&agg_uuid).await {
+                                                        match gryphon_app::adapters::inbound::esrs_pg_store::agg_last_sequence_for::<
+                                                            gryphon_app::esrs::path_planning::PathPlanner,
+                                                        >(&agg_uuid).await {
                                                             Ok(Some(n)) if n >= (completion_envelope.event_version as i64) => {
                                                                 println!("⤴️ esrs pre-check: completion event already present for agg {} (seq={}), skipping persist", agg_uuid, n);
                                                             }

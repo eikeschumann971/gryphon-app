@@ -2,6 +2,7 @@ use esrs::bus::EventBus;
 use esrs::store::postgres::PgStore;
 use esrs::store::postgres::PgStoreBuilder;
 use sqlx::postgres::PgPoolOptions;
+use tracing::{info, warn};
 
 /// Build a PgStore for a specific event type T and attach an EventBus.
 /// The function runs migrations by default via PgStoreBuilder::try_build().
@@ -26,11 +27,12 @@ where
 }
 
 /// Convert a string aggregate id into a stable UUID using UUID v5 (name-based).
-/// This avoids generating new random UUIDs when the application uses string ids
-/// while keeping esrs' UUID-based identity consistent across runs.
+/// This produces a deterministic UUID for the given aggregate id using the
+/// DNS namespace and SHA-1 (v5). Using v5 keeps identities stable across runs
+/// and avoids introducing random UUIDs when the domain uses string IDs.
 pub fn uuid_for_aggregate_id(id: &str) -> uuid::Uuid {
     // Implement a stable name-based UUID (v3) using MD5 so we avoid depending on
-    // a specific uuid crate feature. This mirrors the semantics of v3/v5 but is
+    // a specific uuid crate feature. This mirrors the semantics of v3 but is
     // deterministic for the given id string.
     // Namespace: use the DNS namespace bytes (UUID::NAMESPACE_DNS)
     let mut input = Vec::new();
@@ -50,19 +52,24 @@ pub fn uuid_for_aggregate_id(id: &str) -> uuid::Uuid {
 
 /// Fetch the last sequence_number for the aggregate from the esrs events table.
 /// Returns Ok(Some(n)) if found, Ok(None) if no events exist, or Err on DB error.
-pub async fn agg_last_sequence(agg_uuid: &uuid::Uuid) -> anyhow::Result<Option<i64>> {
+pub async fn agg_last_sequence_for<A>(agg_uuid: &uuid::Uuid) -> anyhow::Result<Option<i64>>
+where
+    A: esrs::Aggregate,
+{
     let database_url = std::env::var("DATABASE_URL").map_err(|e| anyhow::anyhow!(e.to_string()))?;
     let pool = PgPoolOptions::new()
         .max_connections(1)
         .connect(&database_url)
         .await?;
 
-    let row = sqlx::query_as::<_, (Option<i64>,)>(
-        "SELECT max(sequence_number) FROM path_planner_events WHERE aggregate_id = $1",
-    )
-    .bind(agg_uuid)
-    .fetch_one(&pool)
-    .await?;
+    // derive the esrs events table name for the aggregate (convention: <name>_events)
+    let table = format!("{}_events", <A as esrs::Aggregate>::NAME);
+    let query = format!("SELECT max(sequence_number) FROM {} WHERE aggregate_id = $1", table);
+
+    let row = sqlx::query_as::<_, (Option<i64>,)>(&query)
+        .bind(agg_uuid)
+        .fetch_one(&pool)
+        .await?;
 
     Ok(row.0)
 }
@@ -99,16 +106,20 @@ where
                 // Use the aggregate id from the provided agg_state to scope the query
                 // `id()` returns a Uuid which is Copy; avoid clone_on_copy lint.
                 let agg_id = *agg_state.id();
+                // derive table name from aggregate type
+                let table = format!("{}_events", <<S as esrs::store::EventStore>::Aggregate as esrs::Aggregate>::NAME);
 
-                // For each event, serialize to JSON and check for an exact payload
-                // match in the table. If any event is already present, skip persist.
+                // For each event, serialize to JSON and do a best-effort existence check
                 for evt in &events {
                     match serde_json::to_value(evt) {
                         Ok(payload_json) => {
                             // Query for an exact payload match for this aggregate.
                             // The payload column is jsonb in the esrs table.
-                            let query = "SELECT count(*) FROM path_planner_events WHERE aggregate_id = $1 AND payload = $2";
-                            let res = sqlx::query_as::<_, (i64,)>(query)
+                            let query = format!(
+                                "SELECT count(*) FROM {} WHERE aggregate_id = $1 AND payload = $2",
+                                table
+                            );
+                            let res = sqlx::query_as::<_, (i64,)>(&query)
                                 .bind(agg_id)
                                 .bind(payload_json)
                                 .fetch_one(&pool)
@@ -117,30 +128,27 @@ where
                             match res {
                                 Ok((cnt,)) => {
                                     if cnt > 0 {
-                                        println!("⤴️ esrs pre-check: matching event already exists for aggregate {} (skipping persist)", agg_id);
+                                        info!(%agg_id, "esrs pre-check: matching event already exists for aggregate (skipping persist)");
                                         return Ok(());
                                     }
                                 }
                                 Err(e) => {
                                     // If the pre-check query fails, log and break to fall back
                                     // to the normal persist path below.
-                                    println!("⚠️ esrs pre-check query failed: {}. Falling back to persist.", e);
+                                    warn!("esrs pre-check query failed: {}. Falling back to persist.", e);
                                     break;
                                 }
                             }
                         }
                         Err(e) => {
-                            println!("⚠️ esrs pre-check JSON serialization failed: {}. Falling back to persist.", e);
+                            warn!("esrs pre-check JSON serialization failed: {}. Falling back to persist.", e);
                             break;
                         }
                     }
                 }
             }
             Err(e) => {
-                println!(
-                    "⚠️ esrs pre-check DB connection failed: {}. Falling back to persist.",
-                    e
-                );
+                warn!("esrs pre-check DB connection failed: {}. Falling back to persist.", e);
             }
         }
     }
@@ -155,7 +163,7 @@ where
             // Common Postgres duplicate key error fragment
             if s.contains("duplicate key value") || s.contains("unique constraint") {
                 // Best-effort: treat as already-applied
-                println!("⚠️ esrs persist duplicate detected and ignored: {}", s);
+                warn!("esrs persist duplicate detected and ignored: {}", s);
                 Ok(())
             } else {
                 Err(anyhow::anyhow!(s))

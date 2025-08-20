@@ -171,7 +171,10 @@ async fn run_kafka_client() -> Result<(), Box<dyn std::error::Error>> {
             let mut agg_state = esrs::AggregateState::<
                 gryphon_app::esrs::path_planning::PathPlannerState,
             >::with_id(agg_uuid);
-            match gryphon_app::adapters::inbound::esrs_pg_store::agg_last_sequence(&agg_uuid).await
+            match gryphon_app::adapters::inbound::esrs_pg_store::agg_last_sequence_for::<
+                gryphon_app::esrs::path_planning::PathPlanner,
+            >(&agg_uuid)
+            .await
             {
                 Ok(Some(n)) if n >= (event_envelope.event_version as i64) => {
                     println!("⤴️ esrs pre-check: event already present for agg {} (seq={}), skipping persist", agg_uuid, n);

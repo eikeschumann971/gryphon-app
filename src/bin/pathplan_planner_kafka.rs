@@ -531,8 +531,10 @@ impl PathPlanningPlannerService {
                 let agg_uuid = gryphon_app::adapters::inbound::esrs_pg_store::uuid_for_aggregate_id(
                     planner_id,
                 );
-                match gryphon_app::adapters::inbound::esrs_pg_store::agg_last_sequence(&agg_uuid)
-                    .await
+                match gryphon_app::adapters::inbound::esrs_pg_store::agg_last_sequence_for::<
+                    gryphon_app::esrs::path_planning::PathPlanner,
+                >(&agg_uuid)
+                .await
                 {
                     Ok(Some(n)) if n >= 1_i64 => {
                         println!("⤴️ esrs pre-check: event already present for agg {} (seq={}), skipping persist", agg_uuid, n);
@@ -654,9 +656,9 @@ impl PathPlanningPlannerService {
                             gryphon_app::adapters::inbound::esrs_pg_store::uuid_for_aggregate_id(
                                 "main-path-planner",
                             );
-                        match gryphon_app::adapters::inbound::esrs_pg_store::agg_last_sequence(
-                            &agg_uuid,
-                        )
+                        match gryphon_app::adapters::inbound::esrs_pg_store::agg_last_sequence_for::<
+                            gryphon_app::esrs::path_planning::PathPlanner,
+                        >(&agg_uuid)
                         .await
                         {
                             Ok(Some(n)) if n >= 1_i64 => {
