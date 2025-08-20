@@ -17,3 +17,9 @@ pub use noop_logger::*;
 pub use path_planning_data::*;
 pub use postgres::*;
 pub use postgres_graph_store::*;
+
+// ESRS migration adapters
+#[cfg(feature = "esrs_migration")]
+pub mod esrs_kafka_bus;
+#[cfg(feature = "esrs_migration")]
+pub use esrs_kafka_bus::*;
